@@ -27,17 +27,16 @@ from sklearn.metrics import (
 
 # Cấu hình
 train_path = "/kaggle/input/fer2013/train"  # Đường dẫn tập train của FER-2013
-test_path = "/kaggle/input/fer2013/test"   # Đường dẫn tập test của FER-2013
+test_path = "/kaggle/input/fer2013/test"  # Đường dẫn tập test của FER-2013
 
 NUM_CLASSES = 7
 BATCH_SIZE = 32
 NUM_EPOCHS = 100
-LEARNING_RATE = 1e-5
+LEARNING_RATE = 1e-3  # Có thể điều chỉnh nếu cần
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (224, 224)  # ViT yêu cầu kích thước 224x224
-
+TARGET_SIZE = (224, 224)  # MobileNetV2 thường dùng input size 224x224
 SEED = 42
 torch.manual_seed(SEED)
 np.random.seed(SEED)
@@ -47,7 +46,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
 # Ánh xạ nhãn số sang chữ (theo thứ tự alphabet của thư mục trong FER-2013)
-# Thứ tự thư mục: angry -> disgust -> fear -> happy -> neutral -> sad -> surprise
 label_to_emotion = {
     0: "angry",
     1: "disgust",
@@ -81,15 +79,13 @@ test_val_transforms = transforms.Compose(
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 )
-
 # Load dataset và in thông tin
 train_dataset = datasets.ImageFolder(root=train_path, transform=train_transforms)
 test_dataset = datasets.ImageFolder(root=test_path, transform=test_val_transforms)
 
-# In thông tin khi load folder
 print("\nTrain dataset info:")
-print("Classes:", train_dataset.classes)  # Danh sách tên thư mục (classes)
-print("Class to idx:", train_dataset.class_to_idx)  # Ánh xạ từ tên thư mục sang số
+print("Classes:", train_dataset.classes)
+print("Class to idx:", train_dataset.class_to_idx)
 print("Number of samples:", len(train_dataset))
 
 print("\nTest dataset info:")
@@ -211,18 +207,18 @@ test_loader = DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-# Xây dựng mô hình ViT
-class ViTBasePatch16_224_Model(nn.Module):
+# Xây dựng mô hình MobileNetV2
+class MobileNetV2_Model(nn.Module):
     def __init__(self, num_classes):
-        super(ViTBasePatch16_224_Model, self).__init__()
+        super(MobileNetV2_Model, self).__init__()
         self.backbone = timm.create_model(
-            "vit_base_patch16_224", pretrained=True, num_classes=num_classes
+            "mobilenetv2_100", pretrained=True, num_classes=num_classes
         )
 
     def forward(self, x):
         return self.backbone(x)
 
-model = ViTBasePatch16_224_Model(num_classes=NUM_CLASSES)
+model = MobileNetV2_Model(num_classes=NUM_CLASSES)
 model = model.to(device)
 if torch.cuda.device_count() > 1:
     print("Using", torch.cuda.device_count(), "GPUs!")
@@ -242,8 +238,8 @@ def compute_metrics(y_true, y_pred):
     return acc, f1, prec, rec
 
 # Tệp log
-metrics_log_file = "vit_base_patch16_224_FER2013_metrics_log.csv"
-confusion_matrix_log_file = "vit_base_patch16_224_FER2013_confusion_matrix_log.csv"
+metrics_log_file = "MobileNetV2_FER2013_metrics_log.csv"
+confusion_matrix_log_file = "MobileNetV2_FER2013_confusion_matrix_log.csv"
 
 if os.path.exists(metrics_log_file):
     os.remove(metrics_log_file)
@@ -334,7 +330,9 @@ for epoch in range(1, NUM_EPOCHS + 1):
             all_labels_test.extend(labels.cpu().numpy())
 
     test_loss = running_loss_test / len(test_loader.dataset)
-    test_acc, test_f1, test_prec, test_rec = compute_metrics(all_preds_test, all_labels_test)
+    test_acc, test_f1, test_prec, test_rec = compute_metrics(
+        all_preds_test, all_labels_test
+    )
     conf_mat = confusion_matrix(all_labels_test, all_preds_test)
 
     # In kết quả
@@ -373,7 +371,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_model_wts_f1 = copy.deepcopy(model.state_dict())
         epochs_no_improve = 0
         print("Model improved (F1). Saving best model weights.")
-        torch.save(model.state_dict(), "vit_base_patch16_224_FER2013_f1.pth")
+        torch.save(model.state_dict(), "MobileNetV2_FER2013_f1.pth")
     else:
         epochs_no_improve += 1
         print(f"No improvement for {epochs_no_improve} epoch(s).")
@@ -385,11 +383,11 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_acc = val_acc
         best_model_wts_acc = copy.deepcopy(model.state_dict())
         print("Model improved (Accuracy). Saving best model weights.")
-        torch.save(model.state_dict(), "vit_base_patch16_224_FER2013_acc.pth")
+        torch.save(model.state_dict(), "MobileNetV2_FER2013_acc.pth")
 
     if val_loss < best_loss:
         best_loss = val_loss
-        torch.save(model.state_dict(), "vit_base_patch16_224_FER2013_loss.pth")
+        torch.save(model.state_dict(), "MobileNetV2_FER2013_loss.pth")
 
     torch.cuda.empty_cache()
 
