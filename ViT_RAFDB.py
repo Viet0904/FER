@@ -103,43 +103,61 @@ val_split_dataset.transform = test_val_transforms
 val_split_dataset.targets = [train_dataset.targets[i] for i in val_indices]
 
 # Hàm trực quan hóa phân bố lớp
-def visualize_class_distribution(
-    dataset, label_to_emotion, dataset_name="Dataset", save_path=None
+def visualize_combined_class_distribution(
+    train_dataset, val_dataset, test_dataset, label_to_emotion, save_path=None
 ):
-    class_counts = defaultdict(int)
-    for _, label in dataset.samples:
-        class_counts[label_to_emotion[label]] += 1  # +1 để ánh xạ từ 0-6 sang 1-7
+    # Tính phân bố lớp cho từng tập
+    train_class_counts = defaultdict(int)
+    val_class_counts = defaultdict(int)
+    test_class_counts = defaultdict(int)
+    
+    for _, label in train_dataset.samples:
+        train_class_counts[label_to_emotion[label]] += 1
+    for _, label in val_dataset.samples:
+        val_class_counts[label_to_emotion[label]] += 1
+    for _, label in test_dataset.samples:
+        test_class_counts[label_to_emotion[label]] += 1
 
     # In phân bố lớp
-    print(f"{dataset_name} class counts:", dict(class_counts))
+    print("Train class counts:", dict(train_class_counts))
+    print("Validation class counts:", dict(val_class_counts))
+    print("Test class counts:", dict(test_class_counts))
 
-    # Trực quan hóa
-    emotions = list(class_counts.keys())
-    counts = list(class_counts.values())
+    # Chuẩn bị dữ liệu để vẽ
+    emotions = sorted(train_class_counts.keys())  # Giả sử các nhãn giống nhau giữa các tập
+    train_counts = [train_class_counts[emotion] for emotion in emotions]
+    val_counts = [val_class_counts[emotion] for emotion in emotions]
+    test_counts = [test_class_counts[emotion] for emotion in emotions]
 
-    plt.figure(figsize=(10, 6))
-    plt.bar(emotions, counts, color="skyblue")
-    plt.title(f"Class Distribution in {dataset_name} Set", fontsize=14)
+    # Thiết lập biểu đồ
+    plt.figure(figsize=(12, 6))
+    bar_width = 0.25  # Độ rộng của mỗi thanh
+    index = np.arange(len(emotions))  # Vị trí các nhóm thanh
+
+    plt.bar(index, train_counts, bar_width, label="Train", color="skyblue")
+    plt.bar(index + bar_width, val_counts, bar_width, label="Validation", color="salmon")
+    plt.bar(index + 2 * bar_width, test_counts, bar_width, label="Test", color="lightgreen")
+
+    plt.title("Class Distribution Across Train, Validation, and Test Sets", fontsize=14)
     plt.xlabel("Emotion", fontsize=12)
     plt.ylabel("Number of Samples", fontsize=12)
-    plt.xticks(rotation=45, ha="right")
+    plt.xticks(index + bar_width, emotions, rotation=45, ha="right")
+    plt.legend()
     plt.tight_layout()
 
     # Lưu ảnh
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        print(f"Saved class distribution plot to {save_path}")
+        print(f"Saved combined class distribution plot to {save_path}")
     plt.close()
 
-# Trực quan hóa và lưu ảnh
-visualize_class_distribution(
-    train_split_dataset, label_to_emotion, "Train", "train_class_distribution.png"
-)
-visualize_class_distribution(
-    val_split_dataset, label_to_emotion, "Validation", "val_class_distribution.png"
-)
-visualize_class_distribution(
-    test_dataset, label_to_emotion, "Test", "test_class_distribution.png"
+# Gọi hàm trực quan hóa kết hợp
+visualize_combined_class_distribution(
+    train_split_dataset,
+    val_split_dataset,
+    test_dataset,
+    label_to_emotion,
+    "combined_class_distribution.png"
 )
 
 # Data loaders
