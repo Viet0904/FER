@@ -26,17 +26,17 @@ from sklearn.metrics import (
 )
 
 # Cấu hình
-train_path = "/kaggle/input/raf-db-dataset/DATASET/train"
-test_path = "/kaggle/input/raf-db-dataset/DATASET/test"
+train_path = "/kaggle/input/fer2013/train"  # Đường dẫn tập train của FER-2013
+test_path = "/kaggle/input/fer2013/test"  # Đường dẫn tập test của FER-2013
 
 NUM_CLASSES = 7
 BATCH_SIZE = 32
 NUM_EPOCHS = 100
-LEARNING_RATE = 1e-5
+LEARNING_RATE = 1e-3
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (224, 224)  # ViT yêu cầu kích thước 224x224
+TARGET_SIZE = (224, 224)
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -46,15 +46,16 @@ random.seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-# Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
+# Ánh xạ nhãn số sang chữ (theo thứ tự alphabet của thư mục trong FER-2013)
+# Thứ tự thư mục: angry -> disgust -> fear -> happy -> neutral -> sad -> surprise
 label_to_emotion = {
-    0: "surprise",  # Thư mục "1"
-    1: "fear",      # Thư mục "2"
-    2: "disgust",   # Thư mục "3"
-    3: "happy",     # Thư mục "4"
-    4: "sad",       # Thư mục "5"
-    5: "angry",     # Thư mục "6"
-    6: "neutral",   # Thư mục "7"
+    0: "angry",
+    1: "disgust",
+    2: "fear",
+    3: "happy",
+    4: "neutral",
+    5: "sad",
+    6: "surprise",
 }
 print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 
@@ -80,12 +81,22 @@ test_val_transforms = transforms.Compose(
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 )
-
-# Load dataset
+# Load dataset và in thông tin
 train_dataset = datasets.ImageFolder(root=train_path, transform=train_transforms)
 test_dataset = datasets.ImageFolder(root=test_path, transform=test_val_transforms)
 
-# Chia tập valid
+# In thông tin khi load folder
+print("\nTrain dataset info:")
+print("Classes:", train_dataset.classes)  # Danh sách tên thư mục (classes)
+print("Class to idx:", train_dataset.class_to_idx)  # Ánh xạ từ tên thư mục sang số
+print("Number of samples:", len(train_dataset))
+
+print("\nTest dataset info:")
+print("Classes:", test_dataset.classes)
+print("Class to idx:", test_dataset.class_to_idx)
+print("Number of samples:", len(test_dataset))
+
+# Chia tập valid (20% từ train)
 train_indices, val_indices = train_test_split(
     list(range(len(train_dataset))),
     test_size=VAL_SIZE,
@@ -101,6 +112,7 @@ val_split_dataset = copy.deepcopy(train_dataset)
 val_split_dataset.samples = [train_dataset.samples[i] for i in val_indices]
 val_split_dataset.transform = test_val_transforms
 val_split_dataset.targets = [train_dataset.targets[i] for i in val_indices]
+
 
 # Hàm trực quan hóa phân bố lớp
 def visualize_combined_class_distribution(
@@ -157,7 +169,7 @@ visualize_combined_class_distribution(
     val_split_dataset,
     test_dataset,
     label_to_emotion,
-    "RAFDB_combined_class_distribution.png"
+    "FER2013_combined_class_distribution.png"
 )
 
 # Data loaders
@@ -199,31 +211,20 @@ test_loader = DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-# Xây dựng mô hình ViT
-class EnhancedViTModel(nn.Module):
+
+# Xây dựng mô hình DenseNet121
+class DenseNet169_Model(nn.Module):
     def __init__(self, num_classes):
-        super(EnhancedViTModel, self).__init__()
+        super(DenseNet169_Model, self).__init__()
         self.backbone = timm.create_model(
-            "vit_base_patch16_224", pretrained=True, num_classes=0
+            "densenet169", pretrained=True, num_classes=num_classes
         )
-        # MLP head nhiều lớp hơn
-        self.mlp_head = nn.Sequential(
-            nn.LayerNorm(768),  # 768 là kích thước mặc định của ViT base
-            nn.Linear(768, 1024),
-            nn.GELU(),
-            nn.Dropout(0.5),
-            nn.Linear(1024, 512),
-            nn.GELU(),
-            nn.Dropout(0.3),
-            nn.Linear(512, num_classes)
-        )
-    
+
     def forward(self, x):
-        features = self.backbone(x)
-        return self.mlp_head(features)
+        return self.backbone(x)
 
 
-model = EnhancedViTModel(num_classes=NUM_CLASSES)
+model = DenseNet169_Model(num_classes=NUM_CLASSES)
 model = model.to(device)
 if torch.cuda.device_count() > 1:
     print("Using", torch.cuda.device_count(), "GPUs!")
@@ -234,6 +235,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=9, gamma=0.3)
 
+
 # Hàm tính metrics
 def compute_metrics(y_true, y_pred):
     acc = accuracy_score(y_true, y_pred)
@@ -242,9 +244,10 @@ def compute_metrics(y_true, y_pred):
     f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
     return acc, f1, prec, rec
 
+
 # Tệp log
-metrics_log_file = "vit_base_patch16_224_RAFDB_vs1_metrics_log.csv"
-confusion_matrix_log_file = "vit_base_patch16_224_RAFDB_vs1_confusion_matrix_log.csv"
+metrics_log_file = "DenseNet169_FER2013_metrics_log.csv"
+confusion_matrix_log_file = "DenseNet169_FER2013_confusion_matrix_log.csv"
 
 if os.path.exists(metrics_log_file):
     os.remove(metrics_log_file)
@@ -335,7 +338,9 @@ for epoch in range(1, NUM_EPOCHS + 1):
             all_labels_test.extend(labels.cpu().numpy())
 
     test_loss = running_loss_test / len(test_loader.dataset)
-    test_acc, test_f1, test_prec, test_rec = compute_metrics(all_preds_test, all_labels_test)
+    test_acc, test_f1, test_prec, test_rec = compute_metrics(
+        all_preds_test, all_labels_test
+    )
     conf_mat = confusion_matrix(all_labels_test, all_preds_test)
 
     # In kết quả
@@ -374,7 +379,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_model_wts_f1 = copy.deepcopy(model.state_dict())
         epochs_no_improve = 0
         print("Model improved (F1). Saving best model weights.")
-        torch.save(model.state_dict(), "vit_base_patch16_224_RAFDB_vs1_f1.pth")
+        torch.save(model.state_dict(), "DenseNet169_FER2013_f1.pth")
     else:
         epochs_no_improve += 1
         print(f"No improvement for {epochs_no_improve} epoch(s).")
@@ -386,11 +391,11 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_acc = val_acc
         best_model_wts_acc = copy.deepcopy(model.state_dict())
         print("Model improved (Accuracy). Saving best model weights.")
-        torch.save(model.state_dict(), "vit_base_patch16_224_RAFDB_vs1_acc.pth")
+        torch.save(model.state_dict(), "DenseNet169_FER2013_acc.pth")
 
     if val_loss < best_loss:
         best_loss = val_loss
-        torch.save(model.state_dict(), "vit_base_patch16_224_RAFDB_vs1_loss.pth")
+        torch.save(model.state_dict(), "DenseNet169_FER2013_loss.pth")
 
     torch.cuda.empty_cache()
 

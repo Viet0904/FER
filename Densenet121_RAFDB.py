@@ -32,11 +32,11 @@ test_path = "/kaggle/input/raf-db-dataset/DATASET/test"
 NUM_CLASSES = 7
 BATCH_SIZE = 32
 NUM_EPOCHS = 100
-LEARNING_RATE = 1e-5
+LEARNING_RATE = 1e-3
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (224, 224)  # ViT yêu cầu kích thước 224x224
+TARGET_SIZE = (224, 224)  # DenseNet-121 sử dụng kích thước 224x224
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -46,7 +46,7 @@ random.seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-# Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
+# Ánh xạ nhãn số sang chữ
 label_to_emotion = {
     0: "surprise",  # Thư mục "1"
     1: "fear",      # Thư mục "2"
@@ -56,7 +56,7 @@ label_to_emotion = {
     5: "angry",     # Thư mục "6"
     6: "neutral",   # Thư mục "7"
 }
-print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
+print("Mapping (original label -> emotion):", label_to_emotion)
 
 # Data Augmentation
 train_transforms = transforms.Compose(
@@ -199,31 +199,18 @@ test_loader = DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-# Xây dựng mô hình ViT
-class EnhancedViTModel(nn.Module):
+# Xây dựng mô hình DenseNet-121
+class DenseNet121_Model(nn.Module):
     def __init__(self, num_classes):
-        super(EnhancedViTModel, self).__init__()
+        super(DenseNet121_Model, self).__init__()
         self.backbone = timm.create_model(
-            "vit_base_patch16_224", pretrained=True, num_classes=0
+            "densenet121", pretrained=True, num_classes=num_classes
         )
-        # MLP head nhiều lớp hơn
-        self.mlp_head = nn.Sequential(
-            nn.LayerNorm(768),  # 768 là kích thước mặc định của ViT base
-            nn.Linear(768, 1024),
-            nn.GELU(),
-            nn.Dropout(0.5),
-            nn.Linear(1024, 512),
-            nn.GELU(),
-            nn.Dropout(0.3),
-            nn.Linear(512, num_classes)
-        )
-    
+
     def forward(self, x):
-        features = self.backbone(x)
-        return self.mlp_head(features)
+        return self.backbone(x)
 
-
-model = EnhancedViTModel(num_classes=NUM_CLASSES)
+model = DenseNet121_Model(num_classes=NUM_CLASSES)
 model = model.to(device)
 if torch.cuda.device_count() > 1:
     print("Using", torch.cuda.device_count(), "GPUs!")
@@ -243,8 +230,8 @@ def compute_metrics(y_true, y_pred):
     return acc, f1, prec, rec
 
 # Tệp log
-metrics_log_file = "vit_base_patch16_224_RAFDB_vs1_metrics_log.csv"
-confusion_matrix_log_file = "vit_base_patch16_224_RAFDB_vs1_confusion_matrix_log.csv"
+metrics_log_file = "DenseNet121_RAFDB_metrics_log.csv"
+confusion_matrix_log_file = "DenseNet121_RAFDB_confusion_matrix_log.csv"
 
 if os.path.exists(metrics_log_file):
     os.remove(metrics_log_file)
@@ -374,7 +361,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_model_wts_f1 = copy.deepcopy(model.state_dict())
         epochs_no_improve = 0
         print("Model improved (F1). Saving best model weights.")
-        torch.save(model.state_dict(), "vit_base_patch16_224_RAFDB_vs1_f1.pth")
+        torch.save(model.state_dict(), "DenseNet121_RAFDB_f1.pth")
     else:
         epochs_no_improve += 1
         print(f"No improvement for {epochs_no_improve} epoch(s).")
@@ -386,11 +373,11 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_acc = val_acc
         best_model_wts_acc = copy.deepcopy(model.state_dict())
         print("Model improved (Accuracy). Saving best model weights.")
-        torch.save(model.state_dict(), "vit_base_patch16_224_RAFDB_vs1_acc.pth")
+        torch.save(model.state_dict(), "DenseNet121_RAFDB_acc.pth")
 
     if val_loss < best_loss:
         best_loss = val_loss
-        torch.save(model.state_dict(), "vit_base_patch16_224_RAFDB_vs1_loss.pth")
+        torch.save(model.state_dict(), "DenseNet121_RAFDB_loss.pth")
 
     torch.cuda.empty_cache()
 
