@@ -1,2 +1,0 @@
-*.pth filter=lfs diff=lfs merge=lfs -text
-*confusion_matrix_log.csv filter=lfs diff=lfs merge=lfs -text
