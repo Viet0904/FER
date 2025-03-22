@@ -277,8 +277,8 @@ def validate_model(model, dataloader, criterion):
 
 
 # Tệp log
-metrics_log_file = "MobileNetV2_RAFDB_metrics_log.csv"
-confusion_matrix_log_file = "MobileNetV2_RAFDB_confusion_matrix_log.csv"
+metrics_log_file = "MobileNetV2_RAFDB_vs1_metrics_log.csv"
+confusion_matrix_log_file = "MobileNetV2_RAFDB_vs1_confusion_matrix_log.csv"
 
 if os.path.exists(metrics_log_file):
     os.remove(metrics_log_file)
@@ -392,7 +392,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'best_f1': best_f1,
-        }, "MobileNetV2_RAFDB_f1.pth")
+        }, "MobileNetV2_RAFDB_vs1_f1.pth")
     else:
         epochs_no_improve += 1
         print(f"No improvement for {epochs_no_improve} epoch(s).")
@@ -410,7 +410,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'best_acc': best_acc,
-        }, "MobileNetV2_RAFDB_acc.pth")
+        }, "MobileNetV2_RAFDB_vs1_acc.pth")
 
     if val_loss < best_loss:
         best_loss = val_loss
@@ -421,7 +421,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'best_loss': best_loss,
-        }, "MobileNetV2_RAFDB_loss.pth")
+        }, "MobileNetV2_RAFDB_vs1_loss.pth")
 
     # Giải phóng bộ nhớ CUDA
     torch.cuda.empty_cache()
