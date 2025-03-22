@@ -58,17 +58,17 @@ label_to_emotion = {
 }
 print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 
-# Tăng cường dữ liệu cho tập huấn luyện
+# Tăng cường dữ liệu cho tập huấn luyện - Đã sửa thứ tự transforms
 train_transforms = transforms.Compose(
     [
         transforms.Resize(TARGET_SIZE),
         transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(15),  # Tăng góc xoay
-        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.2),  # Tăng cường độ biến đổi màu sắc
+        transforms.RandomRotation(15),
+        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.2),
         transforms.Grayscale(num_output_channels=3),
-        transforms.RandomAffine(degrees=0, translate=(0.15, 0.15), scale=(0.85, 1.15)),  # Tăng biến đổi affine
-        transforms.RandomErasing(p=0.2),  # Thêm random erasing
-        transforms.ToTensor(),
+        transforms.RandomAffine(degrees=0, translate=(0.15, 0.15), scale=(0.85, 1.15)),
+        transforms.ToTensor(),  # Chuyển đổi thành tensor trước khi áp dụng RandomErasing
+        transforms.RandomErasing(p=0.2),  # Đặt sau ToTensor để tránh lỗi
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 )
@@ -201,7 +201,7 @@ test_loader = DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-# Lớp Attention để tập trung vào các đặc trưng quan trọng
+# Lớp Spatial Attention
 class SpatialAttention(nn.Module):
     def __init__(self, in_channels):
         super(SpatialAttention, self).__init__()
@@ -212,7 +212,7 @@ class SpatialAttention(nn.Module):
         attention = self.sigmoid(self.conv(x))
         return x * attention
 
-# Lớp Squeeze-and-Excitation để tăng cường đặc trưng kênh
+# Lớp Squeeze-and-Excitation
 class SqueezeExcitation(nn.Module):
     def __init__(self, in_channels, reduction=16):
         super(SqueezeExcitation, self).__init__()
@@ -230,15 +230,15 @@ class SqueezeExcitation(nn.Module):
         y = self.fc(y).view(b, c, 1, 1)
         return x * y.expand_as(x)
 
-# Xây dựng mô hình MobileNetV2 cải tiến
+# Mô hình MobileNetV2 cải tiến
 class EnhancedMobileNetV2(nn.Module):
     def __init__(self, num_classes):
         super(EnhancedMobileNetV2, self).__init__()
         # Tải backbone MobileNetV2 đã được huấn luyện trước
         self.backbone = timm.create_model("mobilenetv2_100", pretrained=True, features_only=True)
         
-        # Lấy số kênh của lớp cuối cùng
-        self.out_channels = self.backbone.feature_info.channels()[-1]  # Thường là 1280
+        # Lấy số kênh của lớp cuối cùng (thường là 1280)
+        self.out_channels = self.backbone.feature_info.channels()[-1]
         
         # Thêm các lớp cải tiến
         self.attention = SpatialAttention(self.out_channels)
@@ -250,12 +250,16 @@ class EnhancedMobileNetV2(nn.Module):
         # Dropout để giảm overfitting
         self.dropout = nn.Dropout(0.3)
         
-        # Lớp phân loại
+        # Cải tiến lớp Fully Connected
         self.classifier = nn.Sequential(
-            nn.Linear(self.out_channels, 512),
-            nn.BatchNorm1d(512),
+            nn.Linear(self.out_channels, 1024),  # Thêm lớp trung gian với số neuron lớn hơn
+            nn.BatchNorm1d(1024),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
+            nn.Linear(1024, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.4),  # Giảm nhẹ tỷ lệ dropout để cân bằng
             nn.Linear(512, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
