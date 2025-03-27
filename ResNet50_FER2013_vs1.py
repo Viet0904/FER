@@ -26,8 +26,8 @@ from sklearn.metrics import (
 )
 
 # Cấu hình
-train_path = "/kaggle/input/fer2013/train"  # Đường dẫn tập train của FER-2013
-test_path = "/kaggle/input/fer2013/test"  # Đường dẫn tập test của FER-2013
+train_path = "/kaggle/input/fer2013/train"
+test_path = "/kaggle/input/fer2013/test"
 
 NUM_CLASSES = 7
 BATCH_SIZE = 32
@@ -36,7 +36,7 @@ LEARNING_RATE = 1e-3
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (224, 224)  # ResNet50 thường dùng input size 224x224
+TARGET_SIZE = (224, 224)
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -46,7 +46,7 @@ random.seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-# Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
+# Ánh xạ nhãn
 label_to_emotion = {
     0: "angry",
     1: "disgust",
@@ -65,7 +65,7 @@ train_transforms = transforms.Compose(
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(10),
         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-        transforms.Grayscale(num_output_channels=3),  # Chuyển tất cả thành ảnh xám
+        transforms.Grayscale(num_output_channels=3),
         transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -75,7 +75,7 @@ train_transforms = transforms.Compose(
 test_val_transforms = transforms.Compose(
     [
         transforms.Resize(TARGET_SIZE),
-        transforms.Grayscale(num_output_channels=3),  # Chuyển tất cả thành ảnh xám
+        transforms.Grayscale(num_output_channels=3),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
@@ -103,17 +103,12 @@ val_split_dataset.transform = test_val_transforms
 val_split_dataset.targets = [train_dataset.targets[i] for i in val_indices]
 
 # Hàm trực quan hóa phân bố lớp
-def visualize_class_distribution(
-    dataset, label_to_emotion, dataset_name="Dataset", save_path=None
-):
+def visualize_class_distribution(dataset, label_to_emotion, dataset_name="Dataset", save_path=None):
     class_counts = defaultdict(int)
     for _, label in dataset.samples:
-        class_counts[label_to_emotion[label]] += 1  # Dùng nhãn trực tiếp từ 0-6
+        class_counts[label_to_emotion[label]] += 1
 
-    # In phân bố lớp
     print(f"{dataset_name} class counts:", dict(class_counts))
-
-    # Trực quan hóa
     emotions = list(class_counts.keys())
     counts = list(class_counts.values())
 
@@ -125,22 +120,15 @@ def visualize_class_distribution(
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
 
-    # Lưu ảnh
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Saved class distribution plot to {save_path}")
     plt.close()
 
 # Trực quan hóa và lưu ảnh
-visualize_class_distribution(
-    train_split_dataset, label_to_emotion, "Train", "train_class_distribution.png"
-)
-visualize_class_distribution(
-    val_split_dataset, label_to_emotion, "Validation", "val_class_distribution.png"
-)
-visualize_class_distribution(
-    test_dataset, label_to_emotion, "Test", "test_class_distribution.png"
-)
+visualize_class_distribution(train_split_dataset, label_to_emotion, "Train", "train_class_distribution.png")
+visualize_class_distribution(val_split_dataset, label_to_emotion, "Validation", "val_class_distribution.png")
+visualize_class_distribution(test_dataset, label_to_emotion, "Test", "test_class_distribution.png")
 
 # Data loaders
 if USE_WEIGHTED_SAMPLER:
@@ -151,35 +139,13 @@ if USE_WEIGHTED_SAMPLER:
     class_weights = {i: 1.0 / max(class_counts[i], 1) for i in range(NUM_CLASSES)}
     sample_weights = [class_weights[label] for _, label in train_split_dataset.samples]
 
-    sampler = WeightedRandomSampler(
-        weights=sample_weights, num_samples=len(train_split_dataset), replacement=True
-    )
-    train_loader = DataLoader(
-        train_split_dataset,
-        batch_size=BATCH_SIZE,
-        sampler=sampler,
-        num_workers=4,
-        pin_memory=True,
-    )
+    sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(train_split_dataset), replacement=True)
+    train_loader = DataLoader(train_split_dataset, batch_size=BATCH_SIZE, sampler=sampler, num_workers=4, pin_memory=True)
 else:
-    train_loader = DataLoader(
-        train_split_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True,
-    )
+    train_loader = DataLoader(train_split_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
 
-val_loader = DataLoader(
-    val_split_dataset,
-    batch_size=BATCH_SIZE,
-    shuffle=False,
-    num_workers=4,
-    pin_memory=True,
-)
-test_loader = DataLoader(
-    test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
-)
+val_loader = DataLoader(val_split_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
+test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
 
 # Định nghĩa lớp SEModule
 class SEModule(nn.Module):
@@ -203,37 +169,32 @@ class SEModule(nn.Module):
 class ResNet50_Attention(nn.Module):
     def __init__(self, num_classes):
         super(ResNet50_Attention, self).__init__()
-        self.backbone = timm.create_model(
-            "resnet50", pretrained=True, features_only=True
-        )
+        try:
+            self.backbone = timm.create_model("resnet50", pretrained=True, features_only=True)
+            print("Successfully loaded pretrained ResNet50 model.")
+        except Exception as e:
+            print(f"Error loading pretrained model: {e}")
+            print("Falling back to non-pretrained model.")
+            self.backbone = timm.create_model("resnet50", pretrained=False, features_only=True)
+
         self.feature_info = self.backbone.feature_info
-
-        # Thêm attention module sau lớp đặc trưng thứ 3 (block3)
         self.attention = SEModule(self.feature_info.channels()[3])
-
-        # Thêm Batch Normalization và Dropout
         self.bn = nn.BatchNorm2d(self.feature_info.channels()[-1])
         self.dropout = nn.Dropout(0.5)
-
-        # Lớp pooling và phân loại
         self.avgpool = nn.AdaptiveAvgPool2d(1)
-        self.classifier = nn.Sequential(
-            nn.Linear(self.feature_info.channels()[-1], num_classes)
-        )
+        self.classifier = nn.Sequential(nn.Linear(self.feature_info.channels()[-1], num_classes))
 
     def forward(self, x):
         features = self.backbone(x)
-        features[3] = self.attention(features[3])  # Áp dụng attention sau block3
-
-        # Sử dụng lớp đặc trưng cuối cùng
+        features[3] = self.attention(features[3])
         x = self.avgpool(features[-1])
-        x = self.bn(x)  # Chuẩn hóa
-        x = self.dropout(x)  # Dropout
+        x = self.bn(x)
+        x = self.dropout(x)
         x = x.flatten(1)
         x = self.classifier(x)
         return x
 
-# Khởi tạo mô hình ResNet50
+# Khởi tạo mô hình
 model = ResNet50_Attention(num_classes=NUM_CLASSES)
 model = model.to(device)
 if torch.cuda.device_count() > 1:
@@ -346,9 +307,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
             all_labels_test.extend(labels.cpu().numpy())
 
     test_loss = running_loss_test / len(test_loader.dataset)
-    test_acc, test_f1, test_prec, test_rec = compute_metrics(
-        all_preds_test, all_labels_test
-    )
+    test_acc, test_f1, test_prec, test_rec = compute_metrics(all_preds_test, all_labels_test)
     conf_mat = confusion_matrix(all_labels_test, all_preds_test)
 
     # In kết quả

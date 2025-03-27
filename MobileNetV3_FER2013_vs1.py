@@ -48,13 +48,13 @@ print("Using device:", device)
 
 # Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
 label_to_emotion = {
-    0: "surprise",  # Thư mục "1"
-    1: "fear",  # Thư mục "2"
-    2: "disgust",  # Thư mục "3"
-    3: "happy",  # Thư mục "4"
-    4: "sad",  # Thư mục "5"
-    5: "angry",  # Thư mục "6"
-    6: "neutral",  # Thư mục "7"
+    0: "angry",
+    1: "disgust",
+    2: "fear",
+    3: "happy",
+    4: "neutral",
+    5: "sad",
+    6: "surprise",
 }
 print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 
@@ -254,8 +254,8 @@ def compute_metrics(y_true, y_pred):
     return acc, f1, prec, rec
 
 # Tệp log
-metrics_log_file = "MobileNetV3_RAFDB_vs1_metrics_log.csv"
-confusion_matrix_log_file = "MobileNetV3_RAFDB_vs1_confusion_matrix_log.csv"
+metrics_log_file = "MobileNetV3_FER2013_vs1_metrics_log.csv"
+confusion_matrix_log_file = "MobileNetV3_FER2013_vs1_confusion_matrix_log.csv"
 
 if os.path.exists(metrics_log_file):
     os.remove(metrics_log_file)
@@ -387,7 +387,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_model_wts_f1 = copy.deepcopy(model.state_dict())
         epochs_no_improve = 0
         print("Model improved (F1). Saving best model weights.")
-        torch.save(model.state_dict(), "MobileNetV3_RAFDB_vs1_f1.pth")
+        torch.save(model.state_dict(), "MobileNetV3_FER2013_vs1_f1.pth")
     else:
         epochs_no_improve += 1
         print(f"No improvement for {epochs_no_improve} epoch(s).")
@@ -399,11 +399,11 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_acc = val_acc
         best_model_wts_acc = copy.deepcopy(model.state_dict())
         print("Model improved (Accuracy). Saving best model weights.")
-        torch.save(model.state_dict(), "MobileNetV3_RAFDB_vs1_acc.pth")
+        torch.save(model.state_dict(), "MobileNetV3_FER2013_vs1_acc.pth")
 
     if val_loss < best_loss:
         best_loss = val_loss
-        torch.save(model.state_dict(), "MobileNetV3_RAFDB_vs1_loss.pth")
+        torch.save(model.state_dict(), "MobileNetV3_FER2013_vs1_loss.pth")
 
     torch.cuda.empty_cache()
 

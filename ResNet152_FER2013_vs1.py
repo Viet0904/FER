@@ -36,7 +36,7 @@ LEARNING_RATE = 1e-3
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (224, 224)  # ResNet152 thường dùng input size 224x224
+TARGET_SIZE = (224, 224)  
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -46,7 +46,7 @@ random.seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-# Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
+# Ánh xạ nhãn số sang chữ (theo nhãn FER-2013)
 label_to_emotion = {
     0: "angry",
     1: "disgust",
@@ -203,19 +203,18 @@ class SEModule(nn.Module):
 class ResNet152_Attention(nn.Module):
     def __init__(self, num_classes):
         super(ResNet152_Attention, self).__init__()
-        self.backbone = timm.create_model(
-            "resnet152", pretrained=True, features_only=True
-        )
+        try:
+            self.backbone = timm.create_model("resnet152", pretrained=True, features_only=True)
+            print("Successfully loaded pretrained ResNet152 model.")
+        except Exception as e:
+            print(f"Error loading pretrained model: {e}")
+            print("Falling back to non-pretrained model.")
+            self.backbone = timm.create_model("resnet152", pretrained=False, features_only=True)
+
         self.feature_info = self.backbone.feature_info
-
-        # Thêm attention module sau lớp đặc trưng thứ 3 (block3)
         self.attention = SEModule(self.feature_info.channels()[3])
-
-        # Thêm Batch Normalization và Dropout
         self.bn = nn.BatchNorm2d(self.feature_info.channels()[-1])
         self.dropout = nn.Dropout(0.5)
-
-        # Lớp pooling và phân loại
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
             nn.Linear(self.feature_info.channels()[-1], num_classes)
@@ -224,8 +223,6 @@ class ResNet152_Attention(nn.Module):
     def forward(self, x):
         features = self.backbone(x)
         features[3] = self.attention(features[3])  # Áp dụng attention sau block3
-
-        # Sử dụng lớp đặc trưng cuối cùng
         x = self.avgpool(features[-1])
         x = self.bn(x)  # Chuẩn hóa
         x = self.dropout(x)  # Dropout

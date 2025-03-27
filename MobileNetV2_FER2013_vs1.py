@@ -26,8 +26,8 @@ from sklearn.metrics import (
 )
 
 # Cấu hình
-train_path = "/kaggle/input/raf-db-dataset/DATASET/train"
-test_path = "/kaggle/input/raf-db-dataset/DATASET/test"
+train_path = "/kaggle/input/fer2013/train"  # Đường dẫn tập train của FER-2013
+test_path = "/kaggle/input/fer2013/test"  # Đường dẫn tập test của FER-2013
 
 NUM_CLASSES = 7
 BATCH_SIZE = 32
@@ -264,8 +264,8 @@ def compute_metrics(y_true, y_pred):
 
 
 # Tệp log
-metrics_log_file = "MobileNetV2_RAFDB_vs1_metrics_log.csv"
-confusion_matrix_log_file = "MobileNetV2_RAFDB_vs1_confusion_matrix_log.csv"
+metrics_log_file = "MobileNetV2_FER2013_vs1_metrics_log.csv"
+confusion_matrix_log_file = "MobileNetV2_FER2013_vs1_confusion_matrix_log.csv"
 
 if os.path.exists(metrics_log_file):
     os.remove(metrics_log_file)
@@ -397,7 +397,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_model_wts_f1 = copy.deepcopy(model.state_dict())
         epochs_no_improve = 0
         print("Model improved (F1). Saving best model weights.")
-        torch.save(model.state_dict(), "MobileNetV2_RAFDB_vs1_f1.pth")
+        torch.save(model.state_dict(), "MobileNetV2_FER2013_vs1_f1.pth")
     else:
         epochs_no_improve += 1
         print(f"No improvement for {epochs_no_improve} epoch(s).")
@@ -409,11 +409,11 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_acc = val_acc
         best_model_wts_acc = copy.deepcopy(model.state_dict())
         print("Model improved (Accuracy). Saving best model weights.")
-        torch.save(model.state_dict(), "MobileNetV2_RAFDB_vs1_acc.pth")
+        torch.save(model.state_dict(), "MobileNetV2_FER2013_vs1_acc.pth")
 
     if val_loss < best_loss:
         best_loss = val_loss
-        torch.save(model.state_dict(), "MobileNetV2_RAFDB_vs1_loss.pth")
+        torch.save(model.state_dict(), "MobileNetV2_FER2013_vs1_loss.pth")
 
     torch.cuda.empty_cache()
 
