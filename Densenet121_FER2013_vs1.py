@@ -26,8 +26,8 @@ from sklearn.metrics import (
 )
 
 # Cấu hình
-train_path = "/kaggle/input/raf-db-dataset/DATASET/train"
-test_path = "/kaggle/input/raf-db-dataset/DATASET/test"
+train_path = "/kaggle/input/fer2013/train"  # Đường dẫn tập train của FER-2013
+test_path = "/kaggle/input/fer2013/test"   # Đường dẫn tập test của FER-2013
 
 NUM_CLASSES = 7
 BATCH_SIZE = 32
@@ -48,13 +48,13 @@ print("Using device:", device)
 
 # Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
 label_to_emotion = {
-    0: "surprise",  # Thư mục "1"
-    1: "fear",  # Thư mục "2"
-    2: "disgust",  # Thư mục "3"
-    3: "happy",  # Thư mục "4"
-    4: "sad",  # Thư mục "5"
-    5: "angry",  # Thư mục "6"
-    6: "neutral",  # Thư mục "7"
+    0: "angry",
+    1: "disgust",
+    2: "fear",
+    3: "happy",
+    4: "neutral",
+    5: "sad",
+    6: "surprise",
 }
 print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 

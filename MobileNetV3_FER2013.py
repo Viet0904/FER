@@ -36,7 +36,7 @@ LEARNING_RATE = 1e-3
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (224, 224)  # MobileNetV3 hỗ trợ 224x224
+TARGET_SIZE = (224, 224)  # MobileNetV2 hỗ trợ 224x224
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -48,28 +48,26 @@ print("Using device:", device)
 
 # Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
 label_to_emotion = {
-    0: "surprise",  # Thư mục "1"
-    1: "fear",  # Thư mục "2"
-    2: "disgust",  # Thư mục "3"
-    3: "happy",  # Thư mục "4"
-    4: "sad",  # Thư mục "5"
-    5: "angry",  # Thư mục "6"
-    6: "neutral",  # Thư mục "7"
+    0: "angry",
+    1: "disgust",
+    2: "fear",
+    3: "happy",
+    4: "neutral",
+    5: "sad",
+    6: "surprise",
 }
 print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 
-# Tăng cường data augmentation để cải thiện khả năng tổng quát hóa
 train_transforms = transforms.Compose(
     [
         transforms.Resize(TARGET_SIZE),
         transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(15),  # Tăng góc xoay từ 10 lên 15
-        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.15),  # Tăng biến đổi màu
-        transforms.RandomAffine(degrees=10, translate=(0.15, 0.15), scale=(0.85, 1.15)),  # Tăng biến đổi hình học
+        transforms.RandomRotation(10),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
         transforms.Grayscale(num_output_channels=3),  # Chuyển tất cả thành ảnh xám
+        transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        transforms.RandomErasing(p=0.2),  # Thêm random erasing
     ]
 )
 
@@ -201,153 +199,35 @@ test_loader = DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-# Cải tiến: Thêm class Squeeze-and-Excitation Block
-class SEBlock(nn.Module):
-    def __init__(self, channel, reduction=16):
-        super(SEBlock, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Sequential(
-            nn.Linear(channel, channel // reduction, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Linear(channel // reduction, channel, bias=False),
-            nn.Sigmoid()
-        )
 
-    def forward(self, x):
-        b, c, _, _ = x.size()
-        y = self.avg_pool(x).view(b, c)
-        y = self.fc(y).view(b, c, 1, 1)
-        return x * y.expand_as(x)
 
-# Cải tiến: Thêm class Dual Attention Module (kết hợp channel và spatial attention)
-class DualAttention(nn.Module):
-    def __init__(self, in_channels):
-        super(DualAttention, self).__init__()
-        
-        # Channel attention
-        self.channel_attention = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(in_channels, in_channels // 16, kernel_size=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels // 16, in_channels, kernel_size=1),
-            nn.Sigmoid()
-        )
-        
-        # Spatial attention
-        self.spatial_attention = nn.Sequential(
-            nn.Conv2d(in_channels, 1, kernel_size=7, padding=3),
-            nn.Sigmoid()
-        )
-        
-    def forward(self, x):
-        # Apply channel attention
-        channel_att = self.channel_attention(x)
-        x = x * channel_att
-        
-        # Apply spatial attention
-        spatial_att = self.spatial_attention(x)
-        x = x * spatial_att
-        
-        return x
-
-# Mô hình MobileNetV3 cải tiến với nhiều lớp và cơ chế attention
-class MobileNetV3_Enhanced(nn.Module):
-    def __init__(self, num_classes=7):
-        super(MobileNetV3_Enhanced, self).__init__()
-        # Tạo backbone từ MobileNetV3-Large
+# Xây dựng mô hình MobileNetV3
+class MobileNetV3_Model(nn.Module):
+    def __init__(self, num_classes):
+        super(MobileNetV3_Model, self).__init__()
         self.backbone = timm.create_model(
-            "mobilenetv3_large_100", pretrained=True, num_classes=0, global_pool=""
+            "mobilenetv3_large_100",  # Có thể thay bằng "mobilenetv3_small_100"
+            pretrained=True,
+            num_classes=num_classes
         )
-        
-        # Điều chỉnh dựa trên thực tế - MobileNetV3-Large từ timm có 1280 kênh đầu ra như MobileNetV2
-        # (Một số triển khai khác có thể có 960 kênh)
-        backbone_output_features = 1280
-        
-        # Thêm global pooling
-        self.global_pool = nn.AdaptiveAvgPool2d(1)
-        
-        # Thêm các lớp attention modules
-        # Channel attention cải tiến với squeeze-and-excitation blocks
-        self.channel_attention = nn.Sequential(
-            nn.Linear(backbone_output_features, backbone_output_features // 8),
-            nn.Hardswish(inplace=True),
-            nn.Dropout(0.1),
-            nn.Linear(backbone_output_features // 8, backbone_output_features),
-            nn.Sigmoid()
-        )
-        
-        # Các lớp fully connected với BatchNorm và Dropout
-        self.dropout1 = nn.Dropout(0.25)
-        self.fc1 = nn.Linear(backbone_output_features, 768)  # Thêm một lớp trung gian 768 nodes
-        self.bn1 = nn.BatchNorm1d(768)
-        self.activation1 = nn.Hardswish(inplace=True)
-        
-        self.dropout2 = nn.Dropout(0.35)
-        self.fc2 = nn.Linear(768, 384)  # Thêm một lớp trung gian 384 nodes
-        self.bn2 = nn.BatchNorm1d(384)
-        self.activation2 = nn.Hardswish(inplace=True)
-        
-        self.dropout3 = nn.Dropout(0.3)
-        self.fc3 = nn.Linear(384, 192)  # Thêm một lớp trung gian 192 nodes
-        self.bn3 = nn.BatchNorm1d(192)
-        self.activation3 = nn.Hardswish(inplace=True)
-        
-        self.dropout4 = nn.Dropout(0.25)
-        self.fc4 = nn.Linear(192, 96)  # Thêm một lớp trung gian 96 nodes
-        self.bn4 = nn.BatchNorm1d(96)
-        self.activation4 = nn.Hardswish(inplace=True)
-        
-        self.fc_out = nn.Linear(96, num_classes)
 
     def forward(self, x):
-        # Trích xuất đặc trưng từ backbone
-        features = self.backbone(x)
-        
-        # Áp dụng global pooling
-        x = self.global_pool(features)
-        x = x.view(x.size(0), -1)  # Làm phẳng tensor
-        
-        # Áp dụng channel attention
-        attention_weights = self.channel_attention(x)
-        x = x * attention_weights
-        
-        # Xử lý qua các lớp fully connected
-        x = self.dropout1(x)
-        x = self.fc1(x)
-        x = self.bn1(x)
-        x = self.activation1(x)
-        
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        x = self.bn2(x)
-        x = self.activation2(x)
-        
-        x = self.dropout3(x)
-        x = self.fc3(x)
-        x = self.bn3(x)
-        x = self.activation3(x)
-        
-        x = self.dropout4(x)
-        x = self.fc4(x)
-        x = self.bn4(x)
-        x = self.activation4(x)
-        
-        x = self.fc_out(x)
-        
-        return x
-
+        return self.backbone(x)
 
 # Khởi tạo mô hình
-model = MobileNetV3_Enhanced(num_classes=NUM_CLASSES)
+model = MobileNetV3_Model(num_classes=NUM_CLASSES)
 model = model.to(device)
 if torch.cuda.device_count() > 1:
     print("Using", torch.cuda.device_count(), "GPUs!")
     model = nn.DataParallel(model)
 
-# Loss, Optimizer, Scheduler - giữ nguyên theo yêu cầu
+
+
+
+# Loss, Optimizer, Scheduler
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=9, gamma=0.3)
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=9, gamma=0.28)
 
 
 # Hàm tính metrics
@@ -360,8 +240,8 @@ def compute_metrics(y_true, y_pred):
 
 
 # Tệp log
-metrics_log_file = "MobileNetV3_Enhanced_RAFDB_metrics_log.csv"
-confusion_matrix_log_file = "MobileNetV3_Enhanced_RAFDB_confusion_matrix_log.csv"
+metrics_log_file = "MobileNetV3_FER2013_metrics_log.csv"
+confusion_matrix_log_file = "MobileNetV3_FER2013_confusion_matrix_log.csv"
 
 if os.path.exists(metrics_log_file):
     os.remove(metrics_log_file)
@@ -383,7 +263,7 @@ best_f1 = 0.0
 best_acc = 0.0
 epochs_no_improve = 0
 
-# Training loop with mixed precision
+# Training loop
 scaler = GradScaler()
 
 for epoch in range(1, NUM_EPOCHS + 1):
@@ -453,7 +333,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
 
     test_loss = running_loss_test / len(test_loader.dataset)
     test_acc, test_f1, test_prec, test_rec = compute_metrics(
-        all_labels_test, all_preds_test  # Sửa lỗi: all_preds_test thay vì all_labels_test
+        all_preds_test, all_labels_test
     )
     conf_mat = confusion_matrix(all_labels_test, all_preds_test)
 
@@ -493,7 +373,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_model_wts_f1 = copy.deepcopy(model.state_dict())
         epochs_no_improve = 0
         print("Model improved (F1). Saving best model weights.")
-        torch.save(model.state_dict(), "MobileNetV3_Enhanced_RAFDB_f1.pth")
+        torch.save(model.state_dict(), "MobileNetV3_FER2013_f1.pth")
     else:
         epochs_no_improve += 1
         print(f"No improvement for {epochs_no_improve} epoch(s).")
@@ -505,11 +385,11 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_acc = val_acc
         best_model_wts_acc = copy.deepcopy(model.state_dict())
         print("Model improved (Accuracy). Saving best model weights.")
-        torch.save(model.state_dict(), "MobileNetV3_Enhanced_RAFDB_acc.pth")
+        torch.save(model.state_dict(), "MobileNetV3_FER2013_acc.pth")
 
     if val_loss < best_loss:
         best_loss = val_loss
-        torch.save(model.state_dict(), "MobileNetV3_Enhanced_RAFDB_loss.pth")
+        torch.save(model.state_dict(), "MobileNetV3_FER2013_loss.pth")
 
     torch.cuda.empty_cache()
 

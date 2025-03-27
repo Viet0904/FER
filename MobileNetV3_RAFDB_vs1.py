@@ -36,7 +36,7 @@ LEARNING_RATE = 1e-3
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (224, 224)  # MobileNetV2 hỗ trợ 224x224
+TARGET_SIZE = (224, 224)  # Giữ nguyên như code gốc, nhưng MobileNetV3 thường dùng 224x224
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -58,6 +58,7 @@ label_to_emotion = {
 }
 print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 
+# Data Augmentation
 train_transforms = transforms.Compose(
     [
         transforms.Resize(TARGET_SIZE),
@@ -101,63 +102,44 @@ val_split_dataset.samples = [train_dataset.samples[i] for i in val_indices]
 val_split_dataset.transform = test_val_transforms
 val_split_dataset.targets = [train_dataset.targets[i] for i in val_indices]
 
-
 # Hàm trực quan hóa phân bố lớp
-def visualize_combined_class_distribution(
-    train_dataset, val_dataset, test_dataset, label_to_emotion, save_path=None
+def visualize_class_distribution(
+    dataset, label_to_emotion, dataset_name="Dataset", save_path=None
 ):
-    # Tính phân bố lớp cho từng tập
-    train_class_counts = defaultdict(int)
-    val_class_counts = defaultdict(int)
-    test_class_counts = defaultdict(int)
-    
-    for _, label in train_dataset.samples:
-        train_class_counts[label_to_emotion[label]] += 1
-    for _, label in val_dataset.samples:
-        val_class_counts[label_to_emotion[label]] += 1
-    for _, label in test_dataset.samples:
-        test_class_counts[label_to_emotion[label]] += 1
+    class_counts = defaultdict(int)
+    for _, label in dataset.samples:
+        class_counts[label_to_emotion[label]] += 1  # Dùng nhãn trực tiếp từ 0-6
 
     # In phân bố lớp
-    print("Train class counts:", dict(train_class_counts))
-    print("Validation class counts:", dict(val_class_counts))
-    print("Test class counts:", dict(test_class_counts))
+    print(f"{dataset_name} class counts:", dict(class_counts))
 
-    # Chuẩn bị dữ liệu để vẽ
-    emotions = sorted(train_class_counts.keys())  # Giả sử các nhãn giống nhau giữa các tập
-    train_counts = [train_class_counts[emotion] for emotion in emotions]
-    val_counts = [val_class_counts[emotion] for emotion in emotions]
-    test_counts = [test_class_counts[emotion] for emotion in emotions]
+    # Trực quan hóa
+    emotions = list(class_counts.keys())
+    counts = list(class_counts.values())
 
-    # Thiết lập biểu đồ
-    plt.figure(figsize=(12, 6))
-    bar_width = 0.25  # Độ rộng của mỗi thanh
-    index = np.arange(len(emotions))  # Vị trí các nhóm thanh
-
-    plt.bar(index, train_counts, bar_width, label="Train", color="skyblue")
-    plt.bar(index + bar_width, val_counts, bar_width, label="Validation", color="salmon")
-    plt.bar(index + 2 * bar_width, test_counts, bar_width, label="Test", color="lightgreen")
-
-    plt.title("Class Distribution Across Train, Validation, and Test Sets", fontsize=14)
+    plt.figure(figsize=(10, 6))
+    plt.bar(emotions, counts, color="skyblue")
+    plt.title(f"Class Distribution in {dataset_name} Set", fontsize=14)
     plt.xlabel("Emotion", fontsize=12)
     plt.ylabel("Number of Samples", fontsize=12)
-    plt.xticks(index + bar_width, emotions, rotation=45, ha="right")
-    plt.legend()
+    plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
 
     # Lưu ảnh
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        print(f"Saved combined class distribution plot to {save_path}")
+        print(f"Saved class distribution plot to {save_path}")
     plt.close()
 
-# Gọi hàm trực quan hóa kết hợp
-visualize_combined_class_distribution(
-    train_split_dataset,
-    val_split_dataset,
-    test_dataset,
-    label_to_emotion,
-    "combined_class_distribution.png"
+# Trực quan hóa và lưu ảnh
+visualize_class_distribution(
+    train_split_dataset, label_to_emotion, "Train", "train_class_distribution.png"
+)
+visualize_class_distribution(
+    val_split_dataset, label_to_emotion, "Validation", "val_class_distribution.png"
+)
+visualize_class_distribution(
+    test_dataset, label_to_emotion, "Test", "test_class_distribution.png"
 )
 
 # Data loaders
@@ -199,95 +181,69 @@ test_loader = DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-
-
-# Xây dựng mô hình MobileNetV3
-class MobileNetV3_Enhanced(nn.Module):
-    def __init__(self, num_classes=7):
-        super(MobileNetV3_Enhanced, self).__init__()
-        self.backbone = timm.create_model(
-            "mobilenetv3_large_100", pretrained=True, num_classes=0, global_pool=""
-        )
-        
-        # Điều chỉnh dựa trên thực tế
-        backbone_output_features = 1280  # Thay vì 960
-        
-        self.global_pool = nn.AdaptiveAvgPool2d(1)
-        
-        self.channel_attention = nn.Sequential(
-            nn.Linear(backbone_output_features, backbone_output_features // 8),  # nn.Linear(1280, 160)
-            nn.Hardswish(inplace=True),
-            nn.Dropout(0.1),
-            nn.Linear(backbone_output_features // 8, backbone_output_features),  # nn.Linear(160, 1280)
+# Định nghĩa lớp SEModule
+class SEModule(nn.Module):
+    def __init__(self, channels, reduction=16):
+        super(SEModule, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channels, channels // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channels // reduction, channels, bias=False),
             nn.Sigmoid()
         )
-        
-        self.dropout1 = nn.Dropout(0.25)
-        self.fc1 = nn.Linear(backbone_output_features, 512)  # nn.Linear(1280, 512)
-        self.bn1 = nn.BatchNorm1d(512)
-        self.activation1 = nn.Hardswish(inplace=True)
-        
-        # Các lớp còn lại giữ nguyên
-        self.dropout2 = nn.Dropout(0.35)
-        self.fc2 = nn.Linear(512, 256)
-        self.bn2 = nn.BatchNorm1d(256)
-        self.activation2 = nn.Hardswish(inplace=True)
-        
-        self.dropout3 = nn.Dropout(0.35)
-        self.fc3 = nn.Linear(256, 128)
-        self.bn3 = nn.BatchNorm1d(128)
-        self.activation3 = nn.Hardswish(inplace=True)
-        
-        self.fc4 = nn.Linear(128, num_classes)
 
     def forward(self, x):
-        # Trích xuất đặc trưng từ backbone
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y.expand_as(x)
+
+# Định nghĩa mô hình MobileNetV3-Large với attention
+class MobileNetV3_Attention(nn.Module):
+    def __init__(self, num_classes):
+        super(MobileNetV3_Attention, self).__init__()
+        self.backbone = timm.create_model(
+            "mobilenetv3_large_100", pretrained=True, features_only=True
+        )
+        self.feature_info = self.backbone.feature_info
+
+        # Thêm attention module sau lớp đặc trưng thứ 3
+        self.attention = SEModule(self.feature_info.channels()[3])
+
+        # Thêm Batch Normalization và Dropout
+        self.bn = nn.BatchNorm2d(self.feature_info.channels()[-1])
+        self.dropout = nn.Dropout(0.5)
+
+        # Lớp pooling và phân loại
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.classifier = nn.Sequential(
+            nn.Linear(self.feature_info.channels()[-1], num_classes)
+        )
+
+    def forward(self, x):
         features = self.backbone(x)
-        
-        # Áp dụng global pooling
-        x = self.global_pool(features)
-        x = x.view(x.size(0), -1)  # Làm phẳng tensor
-        
-        # Áp dụng channel attention
-        attention_weights = self.channel_attention(x)
-        x = x * attention_weights
-        
-        # Xử lý qua các lớp fully connected
-        x = self.dropout1(x)
-        x = self.fc1(x)
-        x = self.bn1(x)
-        x = self.activation1(x)
-        
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        x = self.bn2(x)
-        x = self.activation2(x)
-        
-        x = self.dropout3(x)
-        x = self.fc3(x)
-        x = self.bn3(x)
-        x = self.activation3(x)
-        
-        x = self.fc4(x)
-        
+        features[3] = self.attention(features[3])  # Áp dụng attention
+
+        # Sử dụng lớp đặc trưng cuối cùng
+        x = self.avgpool(features[-1])
+        x = self.bn(x)  # Chuẩn hóa
+        x = self.dropout(x)  # Dropout
+        x = x.flatten(1)
+        x = self.classifier(x)
         return x
 
-
-# Khởi tạo mô hình
-model = MobileNetV3_Enhanced(num_classes=NUM_CLASSES)
+# Khởi tạo mô hình MobileNetV3-Large
+model = MobileNetV3_Attention(num_classes=NUM_CLASSES)
 model = model.to(device)
 if torch.cuda.device_count() > 1:
     print("Using", torch.cuda.device_count(), "GPUs!")
     model = nn.DataParallel(model)
 
-
-
-
 # Loss, Optimizer, Scheduler
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=9, gamma=0.3)
-
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=9, gamma=0.28)
 
 # Hàm tính metrics
 def compute_metrics(y_true, y_pred):
@@ -296,7 +252,6 @@ def compute_metrics(y_true, y_pred):
     rec = recall_score(y_true, y_pred, average="macro", zero_division=0)
     f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
     return acc, f1, prec, rec
-
 
 # Tệp log
 metrics_log_file = "MobileNetV3_RAFDB_vs1_metrics_log.csv"
