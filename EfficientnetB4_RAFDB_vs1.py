@@ -184,27 +184,7 @@ test_loader = DataLoader(
 )
 
 
-# Xây dựng mô hình EfficientNetB4class SEModule(nn.Module):
-# Định nghĩa lớp SEModule
-class SEModule(nn.Module):
-    def __init__(self, channels, reduction=16):
-        super(SEModule, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Sequential(
-            nn.Linear(channels, channels // reduction, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Linear(channels // reduction, channels, bias=False),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        b, c, _, _ = x.size()
-        y = self.avg_pool(x).view(b, c)
-        y = self.fc(y).view(b, c, 1, 1)
-        return x * y.expand_as(x)
-
 # Định nghĩa mô hình EfficientNetB4 với attention
-# Định nghĩa lớp SEModule (giữ nguyên như cũ)
 class SEModule(nn.Module):
     def __init__(self, channels, reduction=16):
         super(SEModule, self).__init__()
@@ -280,8 +260,8 @@ def compute_metrics(y_true, y_pred):
 
 
 # Tệp log
-metrics_log_file = "EfficientNetB4_RAFDB_vs2_metrics_log.csv"
-confusion_matrix_log_file = "EfficientNetB4_RAFDB_vs2_confusion_matrix_log.csv"
+metrics_log_file = "EfficientNetB4_RAFDB_vs1_metrics_log.csv"
+confusion_matrix_log_file = "EfficientNetB4_RAFDB_vs1_confusion_matrix_log.csv"
 
 if os.path.exists(metrics_log_file):
     os.remove(metrics_log_file)
@@ -413,7 +393,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_model_wts_f1 = copy.deepcopy(model.state_dict())
         epochs_no_improve = 0
         print("Model improved (F1). Saving best model weights.")
-        torch.save(model.state_dict(), "EfficientNetB4_RAFDB_vs2_f1.pth")
+        torch.save(model.state_dict(), "EfficientNetB4_RAFDB_vs1_f1.pth")
     else:
         epochs_no_improve += 1
         print(f"No improvement for {epochs_no_improve} epoch(s).")
@@ -425,11 +405,11 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_acc = val_acc
         best_model_wts_acc = copy.deepcopy(model.state_dict())
         print("Model improved (Accuracy). Saving best model weights.")
-        torch.save(model.state_dict(), "EfficientNetB4_RAFDB_vs2_acc.pth")
+        torch.save(model.state_dict(), "EfficientNetB4_RAFDB_vs1_acc.pth")
 
     if val_loss < best_loss:
         best_loss = val_loss
-        torch.save(model.state_dict(), "EfficientNetB4_RAFDB_vs2_loss.pth")
+        torch.save(model.state_dict(), "EfficientNetB4_RAFDB_vs1_loss.pth")
 
     torch.cuda.empty_cache()
 
