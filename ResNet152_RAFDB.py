@@ -202,7 +202,7 @@ if torch.cuda.device_count() > 1:
 # Loss, Optimizer, Scheduler
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=9, gamma=0.3)
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=9, gamma=0.28)
 
 # Hàm tính metrics
 def compute_metrics(y_true, y_pred):
