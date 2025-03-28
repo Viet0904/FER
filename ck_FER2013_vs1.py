@@ -11,13 +11,13 @@ import seaborn as sns
 from timm import create_model
 
 # Configurations
-MODEL_PATH = "EfficientNetB4_FER2013_vs1_f1.pth"  # Đường dẫn tới checkpoint của EfficientNetB4_Attention đã huấn luyện
+MODEL_PATH = "ResNet50_FER2013_vs1_f1.pth"  # Đường dẫn tới checkpoint của ResNet50_Attention đã huấn luyện
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_CLASSES = 7
-TARGET_SIZE = (380, 380)  # Kích thước đầu vào của EfficientNetB4_Attention
+TARGET_SIZE = (224, 224)  # Kích thước đầu vào của ResNet50_Attention
 BATCH_SIZE = 32
 
-# Label mapping from CK+ to FER-2013 (theo nhãn của EfficientNetB4_Attention)
+# Label mapping from CK+ to FER-2013 (theo nhãn của ResNet50_Attention)
 # CK+ labels: 0=anger, 1=disgust, 2=fear, 3=happiness, 4=sadness, 5=surprise, 6=neutral, 7=contempt
 # FER-2013 labels: 0=angry, 1=disgust, 2=fear, 3=happy, 4=neutral, 5=sad, 6=surprise
 ck_to_fer_mapping = {
@@ -89,7 +89,7 @@ ck_loader = DataLoader(
     ck_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-# Define the EfficientNetB4_Attention model (từ code mới)
+# Define the ResNet50_Attention model (từ code mới)
 class SEModule(nn.Module):
     def __init__(self, channels, reduction=16):
         super(SEModule, self).__init__()
@@ -107,41 +107,28 @@ class SEModule(nn.Module):
         y = self.fc(y).view(b, c, 1, 1)
         return x * y.expand_as(x)
 
-class EfficientNetB4_Attention(nn.Module):
+class ResNet50_Attention(nn.Module):
     def __init__(self, num_classes):
-        super(EfficientNetB4_Attention, self).__init__()
-        self.backbone = create_model(
-            "efficientnet_b4", pretrained=False, features_only=True
-        )
+        super(ResNet50_Attention, self).__init__()
+        self.backbone = create_model("resnet50", pretrained=False, features_only=True)
         self.feature_info = self.backbone.feature_info
-
-        # Thêm attention module sau lớp đặc trưng thứ 3
         self.attention = SEModule(self.feature_info.channels()[3])
-
-        # Thêm Batch Normalization và Dropout
         self.bn = nn.BatchNorm2d(self.feature_info.channels()[-1])
         self.dropout = nn.Dropout(0.5)
-
-        # Lớp pooling và phân loại
         self.avgpool = nn.AdaptiveAvgPool2d(1)
-        self.classifier = nn.Sequential(
-            nn.Linear(self.feature_info.channels()[-1], num_classes)
-        )
+        self.classifier = nn.Sequential(nn.Linear(self.feature_info.channels()[-1], num_classes))
 
     def forward(self, x):
         features = self.backbone(x)
-        features[3] = self.attention(features[3])  # Áp dụng attention
-
-        # Sử dụng lớp đặc trưng cuối cùng
+        features[3] = self.attention(features[3])
         x = self.avgpool(features[-1])
-        x = self.bn(x)  # Chuẩn hóa
-        x = self.dropout(x)  # Dropout
+        x = self.bn(x)
+        x = self.dropout(x)
         x = x.flatten(1)
         x = self.classifier(x)
         return x
-
 # Load the model
-model = EfficientNetB4_Attention(num_classes=NUM_CLASSES)
+model = ResNet50_Attention(num_classes=NUM_CLASSES)
 state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
 state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}  # Remove "module." prefix if needed
 model.load_state_dict(state_dict)
@@ -191,12 +178,12 @@ plt.xticks(rotation=45, ha="right")
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.savefig(
-    "EfficientNetB4_FER201_vs1_confusion_matrix_ckextended_raw.png",
+    "ResNet50_FER201_vs1_confusion_matrix_ckextended_raw.png",
     dpi=300,
     bbox_inches="tight",
 )
 print(
-    "Raw confusion matrix saved to 'EfficientNetB4_FER201_vs1_confusion_matrix_ckextended_raw.png'"
+    "Raw confusion matrix saved to 'ResNet50_FER201_vs1_confusion_matrix_ckextended_raw.png'"
 )
 
 # Visualize Normalized Confusion Matrix
@@ -216,12 +203,12 @@ plt.xticks(rotation=45, ha="right")
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.savefig(
-    "EfficientNetB4_FER201_vs1_confusion_matrix_ckextended_normalized.png",
+    "ResNet50_FER201_vs1_confusion_matrix_ckextended_normalized.png",
     dpi=300,
     bbox_inches="tight",
 )
 print(
-    "Normalized confusion matrix saved to 'EfficientNetB4_FER201_vs1_confusion_matrix_ckextended_normalized.png'"
+    "Normalized confusion matrix saved to 'ResNet50_FER201_vs1_confusion_matrix_ckextended_normalized.png'"
 )
 
 # Save both matrices to CSV
@@ -230,9 +217,9 @@ cm_raw_df = pd.DataFrame(
     index=[label_to_emotion[i] for i in range(NUM_CLASSES)],
     columns=[label_to_emotion[i] for i in range(NUM_CLASSES)],
 )
-cm_raw_df.to_csv("EfficientNetB4_FER201_vs1_confusion_matrix_ckextended_raw.csv")
+cm_raw_df.to_csv("ResNet50_FER201_vs1_confusion_matrix_ckextended_raw.csv")
 print(
-    "Raw confusion matrix saved to 'EfficientNetB4_FER201_vs1_confusion_matrix_ckextended_raw.csv'"
+    "Raw confusion matrix saved to 'ResNet50_FER201_vs1_confusion_matrix_ckextended_raw.csv'"
 )
 
 cm_normalized_df = pd.DataFrame(
@@ -241,10 +228,10 @@ cm_normalized_df = pd.DataFrame(
     columns=[label_to_emotion[i] for i in range(NUM_CLASSES)],
 )
 cm_normalized_df.to_csv(
-    "EfficientNetB4_FER201_vs1_confusion_matrix_ckextended_normalized.csv"
+    "ResNet50_FER201_vs1_confusion_matrix_ckextended_normalized.csv"
 )
 print(
-    "Normalized confusion matrix saved to 'EfficientNetB4_FER201_vs1_confusion_matrix_ckextended_normalized.csv'"
+    "Normalized confusion matrix saved to 'ResNet50_FER201_vs1_confusion_matrix_ckextended_normalized.csv'"
 )
 
 # Print some basic statistics
