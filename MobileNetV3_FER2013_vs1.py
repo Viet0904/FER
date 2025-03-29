@@ -26,8 +26,8 @@ from sklearn.metrics import (
 )
 
 # Cấu hình
-train_path = "/kaggle/input/raf-db-dataset/DATASET/train"
-test_path = "/kaggle/input/raf-db-dataset/DATASET/test"
+train_path = "/kaggle/input/fer2013/train"  # Đường dẫn tập train của FER-2013
+test_path = "/kaggle/input/fer2013/test"  # Đường dẫn tập test của FER-2013
 
 NUM_CLASSES = 7
 BATCH_SIZE = 32
