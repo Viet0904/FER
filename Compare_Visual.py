@@ -20,7 +20,7 @@ if not os.path.exists(metrics_folder):
 # Danh sách các mô hình và tập dữ liệu
 models = ['ResNet50', 'ResNet121', 'DenseNet121', 'DenseNet169', 'MobileNetV2', 'MobileNetV3'
           'EfficientNetB0', 'EfficientNetB1', 'EfficientNetB2', 'EfficientNetB3', 
-          'EfficientNetB4', 'ViT', 'Swin']
+          'EfficientNetB4',]
 datasets = ['RAF-DB', 'FER-2013']
 data_splits = ['Train', 'Test', 'Val']
 
