@@ -11,7 +11,7 @@ import seaborn as sns
 from timm import create_model
 
 # Configurations
-MODEL_PATH = "/kaggle/input/model_fer2013_augmentation_2/pytorch/default/1/MobileNetV2_Model_FER2013_f1.pth"  # Update this with the path to your EfficientNetB4 checkpoint
+MODEL_PATH = "/kaggle/input/model_fer2013_augmentation_2/pytorch/default/1/EfficientNetB0_FER2013_f1.pth"  # Update this with the path to your EfficientNetB0 checkpoint
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_CLASSES = 7
 TARGET_SIZE = (224, 224)
@@ -45,11 +45,11 @@ label_to_emotion = {
 test_transforms = transforms.Compose(
     [
         transforms.Resize(TARGET_SIZE),
+        transforms.Grayscale(num_output_channels=3),  # Thêm để đồng bộ với mã thứ hai
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 )
-
 
 # Custom Dataset for CK+ Extended
 class CKPlusDataset(Dataset):
@@ -93,19 +93,18 @@ ck_loader = DataLoader(
 
 
 # Define the EfficientNet-B4 model
-class MobileNetV2_Model(nn.Module):
+class EfficientNetB0_Model(nn.Module):
     def __init__(self, num_classes):
-        super(MobileNetV2_Model, self).__init__()
+        super(EfficientNetB0_Model, self).__init__()
         self.backbone = create_model(
-            "mobilenetv2_100", pretrained=False, num_classes=num_classes
+            "efficientnet_b0", pretrained=False, num_classes=num_classes
         )
 
     def forward(self, x):
         return self.backbone(x)
 
-
 # Load the model
-model = MobileNetV2_Model(num_classes=NUM_CLASSES)
+model = EfficientNetB0_Model(num_classes=NUM_CLASSES)
 state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
 state_dict = {
     k.replace("module.", ""): v for k, v in state_dict.items()
@@ -151,12 +150,12 @@ plt.xticks(rotation=45, ha="right")
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.savefig(
-    "MobileNetV2_Model_FER2013_confusion_matrix_ckextended_raw.png",
+    "EfficientNetB0_FER2013_confusion_matrix_ckextended_raw.png",
     dpi=300,
     bbox_inches="tight",
 )
 print(
-    "Raw confusion matrix saved to 'MobileNetV2_Model_FER2013_confusion_matrix_ckextended_raw.png'"
+    "Raw confusion matrix saved to 'EfficientNetB0_FER2013_confusion_matrix_ckextended_raw.png'"
 )
 
 # Visualize Normalized Confusion Matrix
@@ -176,12 +175,12 @@ plt.xticks(rotation=45, ha="right")
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.savefig(
-    "MobileNetV2_Model_FER2013_confusion_matrix_ckextended_normalized.png",
+    "EfficientNetB0_FER2013_confusion_matrix_ckextended_normalized.png",
     dpi=300,
     bbox_inches="tight",
 )
 print(
-    "Normalized confusion matrix saved to 'MobileNetV2_Model_FER2013_confusion_matrix_ckextended_normalized.png'"
+    "Normalized confusion matrix saved to 'EfficientNetB0_FER2013_confusion_matrix_ckextended_normalized.png'"
 )
 
 # Save both matrices to CSV
@@ -190,9 +189,9 @@ cm_raw_df = pd.DataFrame(
     index=[label_to_emotion[i] for i in range(NUM_CLASSES)],
     columns=[label_to_emotion[i] for i in range(NUM_CLASSES)],
 )
-cm_raw_df.to_csv("MobileNetV2_Model_FER2013_confusion_matrix_ckextended_raw.csv")
+cm_raw_df.to_csv("EfficientNetB0_FER2013_confusion_matrix_ckextended_raw.csv")
 print(
-    "Raw confusion matrix saved to 'MobileNetV2_Model_FER2013_confusion_matrix_ckextended_raw.csv'"
+    "Raw confusion matrix saved to 'EfficientNetB0_FER2013_confusion_matrix_ckextended_raw.csv'"
 )
 
 cm_normalized_df = pd.DataFrame(
@@ -201,10 +200,10 @@ cm_normalized_df = pd.DataFrame(
     columns=[label_to_emotion[i] for i in range(NUM_CLASSES)],
 )
 cm_normalized_df.to_csv(
-    "MobileNetV2_Model_FER2013_confusion_matrix_ckextended_normalized.csv"
+    "EfficientNetB0_FER2013_confusion_matrix_ckextended_normalized.csv"
 )
 print(
-    "Normalized confusion matrix saved to 'MobileNetV2_Model_FER2013_confusion_matrix_ckextended_normalized.csv'"
+    "Normalized confusion matrix saved to 'EfficientNetB0_FER2013_confusion_matrix_ckextended_normalized.csv'"
 )
 
 # Print some basic statistics
