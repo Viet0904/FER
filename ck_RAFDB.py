@@ -11,15 +11,13 @@ import seaborn as sns
 from timm import create_model
 
 # Configurations
-MODEL_PATH = "/kaggle/input/model_rafdb_augmentation/pytorch/default/1/EfficientNetB3_RAFDB_f1.pth"  # Update this with the path to your EfficientNetB4 checkpoint
+MODEL_PATH = "/path/to/EfficientNetB2_RAFDB_f1.pth"  # Cập nhật đường dẫn tới checkpoint EfficientNetB2 đã huấn luyện
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_CLASSES = 7
-TARGET_SIZE = (300, 300)
+TARGET_SIZE = (260, 260)  # Thay đổi từ (300, 300) để phù hợp với EfficientNetB2 trong mã thứ hai
 BATCH_SIZE = 32
 
 # Label mapping from CK+ to RAF-DB (excluding Contempt)
-# CK+ labels: 0=anger, 1=disgust, 2=fear, 3=happiness, 4=sadness, 5=surprise, 6=neutral, 7=contempt
-# RAF-DB labels: 0=surprise, 1=fear, 2=disgust, 3=happy, 4=sad, 5=angry, 6=neutral
 ck_to_raf_mapping = {
     0: 5,  # anger -> angry
     1: 2,  # disgust -> disgust
@@ -41,15 +39,15 @@ label_to_emotion = {
     6: "neutral",
 }
 
-# Transformations
+# Transformations (điều chỉnh để phù hợp với mã thứ hai)
 test_transforms = transforms.Compose(
     [
         transforms.Resize(TARGET_SIZE),
+        transforms.Grayscale(num_output_channels=3),  # Thêm để đồng bộ với mã thứ hai
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 )
-
 
 # Custom Dataset for CK+ Extended
 class CKPlusDataset(Dataset):
@@ -74,14 +72,12 @@ class CKPlusDataset(Dataset):
 
         # Convert to PIL image (grayscale)
         from PIL import Image
-
         image = Image.fromarray(image, mode="L").convert("RGB")
 
         if self.transform:
             image = self.transform(image)
 
         return image, emotion
-
 
 # Load the dataset
 ck_dataset = CKPlusDataset(
@@ -91,25 +87,23 @@ ck_loader = DataLoader(
     ck_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-
-# Define the EfficientNet-B4 model
-class EfficientNetB3_Model(nn.Module):
+# Define the EfficientNet-B4 model (lấy từ mã thứ hai)
+class EfficientNetB2_Model(nn.Module):
     def __init__(self, num_classes):
-        super(EfficientNetB3_Model, self).__init__()
+        super(EfficientNetB2_Model, self).__init__()
         self.backbone = create_model(
-            "efficientnet_b3", pretrained=False, num_classes=num_classes
+            "efficientnet_b2", pretrained=False, num_classes=num_classes
         )
 
     def forward(self, x):
         return self.backbone(x)
 
-
 # Load the model
-model = EfficientNetB3_Model(num_classes=NUM_CLASSES)
+model = EfficientNetB2_Model(num_classes=NUM_CLASSES)
 state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
 state_dict = {
     k.replace("module.", ""): v for k, v in state_dict.items()
-}  # Remove "module." prefix
+}  # Remove "module." prefix if trained with DataParallel
 model.load_state_dict(state_dict)
 model = model.to(DEVICE)
 model.eval()
@@ -151,12 +145,12 @@ plt.xticks(rotation=45, ha="right")
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.savefig(
-    "EfficientNetB3_RAFDB_confusion_matrix_ckextended_raw.png",
+    "EfficientNetB2_RAFDB_confusion_matrix_ckextended_raw.png",
     dpi=300,
     bbox_inches="tight",
 )
 print(
-    "Raw confusion matrix saved to 'EfficientNetB3_RAFDB_confusion_matrix_ckextended_raw.png'"
+    "Raw confusion matrix saved to 'EfficientNetB2_RAFDB_confusion_matrix_ckextended_raw.png'"
 )
 
 # Visualize Normalized Confusion Matrix
@@ -164,7 +158,7 @@ plt.figure(figsize=(10, 8))
 sns.heatmap(
     cm_normalized,
     annot=True,
-    fmt=".2f",  # Display as decimals (e.g., 0.80, 0.95)
+    fmt=".2f",
     cmap="Blues",
     xticklabels=[label_to_emotion[i] for i in range(NUM_CLASSES)],
     yticklabels=[label_to_emotion[i] for i in range(NUM_CLASSES)],
@@ -176,12 +170,12 @@ plt.xticks(rotation=45, ha="right")
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.savefig(
-    "EfficientNetB3_RAFDB_confusion_matrix_ckextended_normalized.png",
+    "EfficientNetB2_RAFDB_confusion_matrix_ckextended_normalized.png",
     dpi=300,
     bbox_inches="tight",
 )
 print(
-    "Normalized confusion matrix saved to 'EfficientNetB3_RAFDB_confusion_matrix_ckextended_normalized.png'"
+    "Normalized confusion matrix saved to 'EfficientNetB2_RAFDB_confusion_matrix_ckextended_normalized.png'"
 )
 
 # Save both matrices to CSV
@@ -190,9 +184,9 @@ cm_raw_df = pd.DataFrame(
     index=[label_to_emotion[i] for i in range(NUM_CLASSES)],
     columns=[label_to_emotion[i] for i in range(NUM_CLASSES)],
 )
-cm_raw_df.to_csv("EfficientNetB3_RAFDB_confusion_matrix_ckextended_raw.csv")
+cm_raw_df.to_csv("EfficientNetB2_RAFDB_confusion_matrix_ckextended_raw.csv")
 print(
-    "Raw confusion matrix saved to 'EfficientNetB3_RAFDB_confusion_matrix_ckextended_raw.csv'"
+    "Raw confusion matrix saved to 'EfficientNetB2_RAFDB_confusion_matrix_ckextended_raw.csv'"
 )
 
 cm_normalized_df = pd.DataFrame(
@@ -201,10 +195,10 @@ cm_normalized_df = pd.DataFrame(
     columns=[label_to_emotion[i] for i in range(NUM_CLASSES)],
 )
 cm_normalized_df.to_csv(
-    "EfficientNetB3_RAFDB_confusion_matrix_ckextended_normalized.csv"
+    "EfficientNetB2_RAFDB_confusion_matrix_ckextended_normalized.csv"
 )
 print(
-    "Normalized confusion matrix saved to 'EfficientNetB3_RAFDB_confusion_matrix_ckextended_normalized.csv'"
+    "Normalized confusion matrix saved to 'EfficientNetB2_RAFDB_confusion_matrix_ckextended_normalized.csv'"
 )
 
 # Print some basic statistics
