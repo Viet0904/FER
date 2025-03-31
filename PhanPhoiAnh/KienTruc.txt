@@ -1,0 +1,74 @@
+digraph EfficientNetB4_Attention {
+    rankdir=TB;
+    node [shape=rect, style=filled, fillcolor=lightblue, fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    
+    // Input và tiền xử lý
+    RawInput [label="Raw Input Image", shape=ellipse, fillcolor=lightyellow];
+    
+    // Preprocessing
+    preprocess [label="Preprocessing\n- Resize (380x380)\n- Grayscale (3 channels)\n- Normalize", fillcolor=lightyellow];
+    
+
+    
+    subgraph cluster_backbone {
+        label="EfficientNetB4 Backbone";
+        style=filled;
+        fillcolor=aliceblue;
+        
+        conv_stem [label="Conv Stem"];
+        feature0 [label="Feature Map 0"];
+        feature1 [label="Feature Map 1"];
+        feature2 [label="Feature Map 2"];
+        feature3 [label="Feature Map 3", fillcolor=lightgreen];
+        feature4 [label="Feature Map 4", fillcolor=lightgreen];
+    }
+    
+    subgraph cluster_attention {
+        label="Squeeze-and-Excitation Module";
+        style=filled;
+        fillcolor=lavenderblush;
+        
+        avgpool [label="AdaptiveAvgPool2d(1)"];
+        fc1 [label="FC1 (Reduction)"];
+        relu [label="ReLU"];
+        fc2 [label="FC2 (Expansion)"];
+        sigmoid [label="Sigmoid"];
+        scale [label="Scale Feature Map"];
+    }
+    
+    subgraph cluster_classifier {
+        label="Classification Head";
+        style=filled;
+        fillcolor=honeydew;
+        
+        bn [label="BatchNorm2d"];
+        dropout [label="Dropout(0.5)"];
+        avgpool_final [label="AdaptiveAvgPool2d(1)"];
+        flatten [label="Flatten"];
+        fc_final [label="Linear(num_features, 7)", fillcolor=orange];
+    }
+    
+    // Connections
+    RawInput -> preprocess;
+    preprocess -> conv_stem;
+
+    conv_stem -> feature0 -> feature1 -> feature2 -> feature3 -> feature4;
+    
+    feature3 -> avgpool;
+    feature3 -> scale [style=dashed, color=gray, label="Original"];
+    avgpool -> fc1 -> relu -> fc2 -> sigmoid -> scale;
+    scale -> feature3 [label="Enhanced", color=red];
+    
+    feature4 -> avgpool_final -> bn -> dropout -> flatten -> fc_final;
+    
+    fc_final -> Output [label="7 Emotions", shape=ellipse, fillcolor=yellow];
+    
+    // Annotations
+    note_attention [label="Attention applied\nto Feature Map 3", shape=note, fillcolor=lightsalmon];
+    note_attention -> feature3 [style=dashed, arrowhead=none];
+    
+
+    note_emotions [label="surprise, fear, disgust,\nhappy, sad, angry, neutral", shape=note, fillcolor=lightsalmon];
+    note_emotions -> Output [style=dashed, arrowhead=none];
+}

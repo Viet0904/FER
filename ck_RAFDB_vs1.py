@@ -11,10 +11,10 @@ import seaborn as sns
 import timm
 
 # Configurations
-MODEL_PATH = "/kaggle/working/MobileNetV2_RAFDB_vs1_f1.pth"  # Cập nhật đường dẫn nếu cần
+MODEL_PATH = "/kaggle/working/EfficientNetB1_RAFDB_vs1_f1.pth"  # Cập nhật đường dẫn nếu cần
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_CLASSES = 7
-TARGET_SIZE = (224, 224)
+TARGET_SIZE = (240, 240)
 BATCH_SIZE = 32
 
 # Label mapping from CK+ to RAF-DB
@@ -82,12 +82,12 @@ class SEModule(nn.Module):
         y = self.fc(y).view(b, c, 1, 1)
         return x * y.expand_as(x)
 
-# Define MobileNetV2_Attention
-class MobileNetV2_Attention(nn.Module):
+# Define EfficientNetB1_Attention
+class EfficientNetB1_Attention(nn.Module):
     def __init__(self, num_classes):
-        super(MobileNetV2_Attention, self).__init__()
+        super(EfficientNetB1_Attention, self).__init__()
         self.backbone = timm.create_model(
-            "mobilenetv2_100", pretrained=False, features_only=True  # Không dùng pretrained trong dự đoán
+            "efficientnet_b1", pretrained=True, features_only=True
         )
         self.feature_info = self.backbone.feature_info
 
@@ -116,8 +116,9 @@ class MobileNetV2_Attention(nn.Module):
         x = self.classifier(x)
         return x
 
+
 # Load the model
-model = MobileNetV2_Attention(num_classes=NUM_CLASSES)
+model = EfficientNetB1_Attention(num_classes=NUM_CLASSES)
 state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
 state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
 model.load_state_dict(state_dict)
@@ -165,12 +166,12 @@ plt.xticks(rotation=45, ha="right")
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.savefig(
-    "MobileNetV2_RAFDB_vs1_confusion_matrix_ckextended_raw.png",
+    "EfficientNetB1_RAFDB_vs1_confusion_matrix_ckextended_raw.png",
     dpi=300,
     bbox_inches="tight",
 )
 print(
-    "Raw confusion matrix saved to 'MobileNetV2_RAFDB_vs1_confusion_matrix_ckextended_raw.png'"
+    "Raw confusion matrix saved to 'EfficientNetB1_RAFDB_vs1_confusion_matrix_ckextended_raw.png'"
 )
 
 # Visualize Normalized Confusion Matrix
@@ -190,12 +191,12 @@ plt.xticks(rotation=45, ha="right")
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.savefig(
-    "MobileNetV2_RAFDB_vs1_confusion_matrix_ckextended_normalized.png",
+    "EfficientNetB1_RAFDB_vs1_confusion_matrix_ckextended_normalized.png",
     dpi=300,
     bbox_inches="tight",
 )
 print(
-    "Normalized confusion matrix saved to 'MobileNetV2_RAFDB_vs1_confusion_matrix_ckextended_normalized.png'"
+    "Normalized confusion matrix saved to 'EfficientNetB1_RAFDB_vs1_confusion_matrix_ckextended_normalized.png'"
 )
 
 # Save both matrices to CSV
@@ -204,9 +205,9 @@ cm_raw_df = pd.DataFrame(
     index=[label_to_emotion[i] for i in range(NUM_CLASSES)],
     columns=[label_to_emotion[i] for i in range(NUM_CLASSES)],
 )
-cm_raw_df.to_csv("MobileNetV2_RAFDB_vs1_confusion_matrix_ckextended_raw.csv")
+cm_raw_df.to_csv("EfficientNetB1_RAFDB_vs1_confusion_matrix_ckextended_raw.csv")
 print(
-    "Raw confusion matrix saved to 'MobileNetV2_RAFDB_vs1_confusion_matrix_ckextended_raw.csv'"
+    "Raw confusion matrix saved to 'EfficientNetB1_RAFDB_vs1_confusion_matrix_ckextended_raw.csv'"
 )
 
 cm_normalized_df = pd.DataFrame(
@@ -215,10 +216,10 @@ cm_normalized_df = pd.DataFrame(
     columns=[label_to_emotion[i] for i in range(NUM_CLASSES)],
 )
 cm_normalized_df.to_csv(
-    "MobileNetV2_RAFDB_vs1_confusion_matrix_ckextended_normalized.csv"
+    "EfficientNetB1_RAFDB_vs1_confusion_matrix_ckextended_normalized.csv"
 )
 print(
-    "Normalized confusion matrix saved to 'MobileNetV2_RAFDB_vs1_confusion_matrix_ckextended_normalized.csv'"
+    "Normalized confusion matrix saved to 'EfficientNetB1_RAFDB_vs1_confusion_matrix_ckextended_normalized.csv'"
 )
 
 # Print basic statistics

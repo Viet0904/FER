@@ -203,18 +203,19 @@ class SEModule(nn.Module):
 class ResNet152_Attention(nn.Module):
     def __init__(self, num_classes):
         super(ResNet152_Attention, self).__init__()
-        try:
-            self.backbone = timm.create_model("resnet152", pretrained=True, features_only=True)
-            print("Successfully loaded pretrained ResNet152 model.")
-        except Exception as e:
-            print(f"Error loading pretrained model: {e}")
-            print("Falling back to non-pretrained model.")
-            self.backbone = timm.create_model("resnet152", pretrained=False, features_only=True)
-
+        self.backbone = timm.create_model(
+            "resnet152", pretrained=True, features_only=True
+        )
         self.feature_info = self.backbone.feature_info
+
+        # Thêm attention module sau lớp đặc trưng thứ 3 (block3)
         self.attention = SEModule(self.feature_info.channels()[3])
+
+        # Thêm Batch Normalization và Dropout
         self.bn = nn.BatchNorm2d(self.feature_info.channels()[-1])
         self.dropout = nn.Dropout(0.5)
+
+        # Lớp pooling và phân loại
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
             nn.Linear(self.feature_info.channels()[-1], num_classes)
@@ -223,6 +224,8 @@ class ResNet152_Attention(nn.Module):
     def forward(self, x):
         features = self.backbone(x)
         features[3] = self.attention(features[3])  # Áp dụng attention sau block3
+
+        # Sử dụng lớp đặc trưng cuối cùng
         x = self.avgpool(features[-1])
         x = self.bn(x)  # Chuẩn hóa
         x = self.dropout(x)  # Dropout

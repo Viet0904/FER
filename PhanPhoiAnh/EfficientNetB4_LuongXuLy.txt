@@ -1,0 +1,110 @@
+digraph SimplifiedFacialExpressionRecognition {
+    // Graph settings
+    rankdir=TB;
+    node [shape=box, style=filled, fontname="Arial", fontsize=10, margin="0.2,0.1"];
+    edge [fontname="Arial", fontsize=9];
+    
+    // Data Collection
+    DataCollection [label="Data Collection", shape=ellipse, fillcolor="#d6eaf8"];
+    DataCollection -> Datasets;
+    
+    // Datasets
+    Datasets [label="Datasets", fillcolor="#d6eaf8"];
+    Datasets -> {RAFDB; FER2013; CKPlus} [minlen=2];
+    
+    // Dataset descriptions
+    RAFDB [label="RAF-DB", fillcolor="#aed6f1"];
+    FER2013 [label="FER2013", fillcolor="#aed6f1"];
+    CKPlus [label="CK+", fillcolor="#aed6f1"];
+    
+    // Data Split
+    {RAFDB; FER2013} -> DataSplit;
+    DataSplit [label="Data Split", fillcolor="#d4efdf"];
+    DataSplit -> {TrainData; ValData; TestData} [minlen=2];
+    
+    // Train/Test/Valid Split
+    TrainData [label="Train Data\n(80%)", fillcolor="#aed6f1"];
+    ValData [label="Validation Data\n(20% of Train)", fillcolor="#aed6f1"];
+    TestData [label="Test Data", fillcolor="#aed6f1"];
+    
+    // Data Augmentation and Transforms
+    DataAugTrain [label="Data Augmentation (Train)\n- Resize\n- Random Flip\n- Rotation\n- Color Jitter\n- Grayscale\n- Normalize", fillcolor="#d4efdf"];
+    DataAugTrain -> TrainData [dir=back, minlen=2];
+    
+    DataAugTestVal [label="Test/Val Transforms\n- Resize\n- Grayscale\n- Normalize", fillcolor="#d4efdf"];
+    DataAugTestVal -> {ValData; TestData} [dir=back, minlen=2];
+    
+    // Weighted Sampler
+    TrainData -> WeightedSampler;
+    WeightedSampler [label="Weighted Random Sampler\n(for class imbalance)", fillcolor="#d4efdf"];
+    WeightedSampler -> TrainLoader;
+    
+    {TrainLoader; ValData; TestData} -> DataLoader;
+    DataLoader [label="DataLoaders", fillcolor="#d4efdf"];
+    
+    // Model Architecture
+    Model [label="EfficientNetB4", fillcolor="#fadbd8"];
+    DataLoader -> Model;
+    
+    // Training Loop
+    Model -> TrainingLoop;
+    TrainingLoop [label="Training Loop", fillcolor="#d4efdf"];
+    TrainingLoop -> Metrics;
+    
+    // Metrics
+    Metrics [label="Calculate Metrics\n- Accuracy\n- F1 Score\n- Precision\n- Recall", fillcolor="#e8daef"];
+    Metrics -> {LogSaving; EarlyStopping};
+    
+    // Logging
+    LogSaving [label="Save Training Logs", fillcolor="#e8daef"];
+    
+    // Early Stopping
+    EarlyStopping [label="Early Stopping\n(if no improvement\nfor N epochs)", fillcolor="#d4efdf"];
+    EarlyStopping -> BestModel;
+    
+    // Save Best Model
+    BestModel [label="Best Model", fillcolor="#fadbd8"];
+    
+    // CK+ Prediction
+    {BestModel; CKPlus} -> CKPlusPrediction [minlen=2];
+    CKPlusPrediction [label="Prediction on CK+ Dataset", fillcolor="#e8daef"];
+    
+    // Subgraph for organization
+    subgraph cluster_data_prep {
+        label="Data Preparation";
+        labeljust="l";
+        color="#2980b9";
+        style="rounded,filled";
+        fillcolor="#ebf5fb";
+        DataCollection; Datasets; RAFDB; FER2013; CKPlus;
+        DataSplit; TrainData; ValData; TestData;
+    }
+    
+    subgraph cluster_data_processing {
+        label="Data Processing";
+        labeljust="l";
+        color="#27ae60";
+        style="rounded,filled";
+        fillcolor="#eafaf1";
+        DataAugTrain; DataAugTestVal; 
+        WeightedSampler; DataLoader;
+    }
+    
+    subgraph cluster_training {
+        label="Training Process";
+        labeljust="l";
+        color="#16a085";
+        style="rounded,filled";
+        fillcolor="#e8f8f5";
+        Model; TrainingLoop; Metrics; LogSaving; EarlyStopping; BestModel;
+    }
+    
+    subgraph cluster_prediction {
+        label="Prediction";
+        labeljust="l";
+        color="#8e44ad";
+        style="rounded,filled";
+        fillcolor="#f5eef8";
+        CKPlusPrediction;
+    }
+}

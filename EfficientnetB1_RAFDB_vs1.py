@@ -49,12 +49,12 @@ print("Using device:", device)
 # Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
 label_to_emotion = {
     0: "surprise",  # Thư mục "1"
-    1: "fear",  # Thư mục "2"
-    2: "disgust",  # Thư mục "3"
-    3: "happy",  # Thư mục "4"
-    4: "sad",  # Thư mục "5"
-    5: "angry",  # Thư mục "6"
-    6: "neutral",  # Thư mục "7"
+    1: "fear",      # Thư mục "2"
+    2: "disgust",   # Thư mục "3"
+    3: "happy",     # Thư mục "4"
+    4: "sad",       # Thư mục "5"
+    5: "angry",     # Thư mục "6"
+    6: "neutral",   # Thư mục "7"
 }
 print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 

@@ -11,10 +11,10 @@ import seaborn as sns
 from timm import create_model
 
 # Configurations
-MODEL_PATH = "/path/to/MobileNetV3_f1.pth"  # Cập nhật đường dẫn tới checkpoint ResNet50 đã huấn luyện
+MODEL_PATH = "/path/to/EfficientNetB3_f1.pth"  # Cập nhật đường dẫn tới checkpoint ResNet50 đã huấn luyện
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_CLASSES = 7
-TARGET_SIZE = (224, 224)  # Thay đổi từ (300, 300) để phù hợp với ResNet50 trong mã thứ hai
+TARGET_SIZE = (300, 300)  # Thay đổi từ (300, 300) để phù hợp với ResNet50 trong mã thứ hai
 BATCH_SIZE = 32
 
 # Label mapping from CK+ to RAF-DB (excluding Contempt)
@@ -89,18 +89,18 @@ ck_loader = DataLoader(
 
 # Define the EfficientNet-B4 model (lấy từ mã thứ hai)
 # Define the ResNet50 model
-class MobileNetV3_Model(nn.Module):
+class EfficientNetB3_Model(nn.Module):
     def __init__(self, num_classes):
-        super(MobileNetV3_Model, self).__init__()
+        super(EfficientNetB3_Model, self).__init__()
         self.backbone = create_model(
-            "mobilenetv3_large_100", pretrained=False, num_classes=num_classes
-        )
+            "efficientnet_b3", pretrained=False, num_classes=num_classes
+        )  # pretrained=False vì bạn đang load checkpoint
 
     def forward(self, x):
         return self.backbone(x)
 
 # Load the model
-model = MobileNetV3_Model(num_classes=NUM_CLASSES)
+model = EfficientNetB3_Model(num_classes=NUM_CLASSES)
 state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
 state_dict = {
     k.replace("module.", ""): v for k, v in state_dict.items()
@@ -146,12 +146,12 @@ plt.xticks(rotation=45, ha="right")
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.savefig(
-    "MobileNetV3_confusion_matrix_ckextended_raw.png",
+    "EfficientNetB3_confusion_matrix_ckextended_raw.png",
     dpi=300,
     bbox_inches="tight",
 )
 print(
-    "Raw confusion matrix saved to 'MobileNetV3_confusion_matrix_ckextended_raw.png'"
+    "Raw confusion matrix saved to 'EfficientNetB3_confusion_matrix_ckextended_raw.png'"
 )
 
 # Visualize Normalized Confusion Matrix
@@ -171,12 +171,12 @@ plt.xticks(rotation=45, ha="right")
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.savefig(
-    "MobileNetV3_confusion_matrix_ckextended_normalized.png",
+    "EfficientNetB3_confusion_matrix_ckextended_normalized.png",
     dpi=300,
     bbox_inches="tight",
 )
 print(
-    "Normalized confusion matrix saved to 'MobileNetV3_confusion_matrix_ckextended_normalized.png'"
+    "Normalized confusion matrix saved to 'EfficientNetB3_confusion_matrix_ckextended_normalized.png'"
 )
 
 # Save both matrices to CSV
@@ -185,9 +185,9 @@ cm_raw_df = pd.DataFrame(
     index=[label_to_emotion[i] for i in range(NUM_CLASSES)],
     columns=[label_to_emotion[i] for i in range(NUM_CLASSES)],
 )
-cm_raw_df.to_csv("MobileNetV3_confusion_matrix_ckextended_raw.csv")
+cm_raw_df.to_csv("EfficientNetB3_confusion_matrix_ckextended_raw.csv")
 print(
-    "Raw confusion matrix saved to 'MobileNetV3_confusion_matrix_ckextended_raw.csv'"
+    "Raw confusion matrix saved to 'EfficientNetB3_confusion_matrix_ckextended_raw.csv'"
 )
 
 cm_normalized_df = pd.DataFrame(
@@ -196,10 +196,10 @@ cm_normalized_df = pd.DataFrame(
     columns=[label_to_emotion[i] for i in range(NUM_CLASSES)],
 )
 cm_normalized_df.to_csv(
-    "MobileNetV3_confusion_matrix_ckextended_normalized.csv"
+    "EfficientNetB3_confusion_matrix_ckextended_normalized.csv"
 )
 print(
-    "Normalized confusion matrix saved to 'MobileNetV3_confusion_matrix_ckextended_normalized.csv'"
+    "Normalized confusion matrix saved to 'EfficientNetB3_confusion_matrix_ckextended_normalized.csv'"
 )
 
 # Print some basic statistics

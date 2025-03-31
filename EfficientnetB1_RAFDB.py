@@ -48,13 +48,13 @@ print("Using device:", device)
 # Ánh xạ nhãn số sang chữ (theo thứ tự alphabet của thư mục trong FER-2013)
 # Thứ tự thư mục: angry -> disgust -> fear -> happy -> neutral -> sad -> surprise
 label_to_emotion = {
-    0: "angry",
-    1: "disgust",
-    2: "fear",
-    3: "happy",
-    4: "neutral",
-    5: "sad",
-    6: "surprise",
+    0: "surprise",  # Thư mục "1"
+    1: "fear",      # Thư mục "2"
+    2: "disgust",   # Thư mục "3"
+    3: "happy",     # Thư mục "4"
+    4: "sad",       # Thư mục "5"
+    5: "angry",     # Thư mục "6"
+    6: "neutral",   # Thư mục "7"
 }
 print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 

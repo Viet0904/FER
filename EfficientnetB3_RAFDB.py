@@ -25,7 +25,6 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 
-
 # Cấu hình
 train_path = "/kaggle/input/raf-db-dataset/DATASET/train"
 test_path = "/kaggle/input/raf-db-dataset/DATASET/test"
@@ -37,7 +36,7 @@ LEARNING_RATE = 1e-3
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (300, 300)
+TARGET_SIZE = (300, 300)  # Thay đổi từ (380, 380) sang (300, 300) để phù hợp với EfficientNetB3
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -47,7 +46,7 @@ random.seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-# Ánh xạ nhãn số sang chữ
+# Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
 label_to_emotion = {
     0: "surprise",  # Thư mục "1"
     1: "fear",      # Thư mục "2"
@@ -57,7 +56,7 @@ label_to_emotion = {
     5: "angry",     # Thư mục "6"
     6: "neutral",   # Thư mục "7"
 }
-print("Mapping (original label -> emotion):", label_to_emotion)
+print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 
 # Data Augmentation
 train_transforms = transforms.Compose(
@@ -103,14 +102,13 @@ val_split_dataset.samples = [train_dataset.samples[i] for i in val_indices]
 val_split_dataset.transform = test_val_transforms
 val_split_dataset.targets = [train_dataset.targets[i] for i in val_indices]
 
-
 # Hàm trực quan hóa phân bố lớp
 def visualize_class_distribution(
     dataset, label_to_emotion, dataset_name="Dataset", save_path=None
 ):
     class_counts = defaultdict(int)
     for _, label in dataset.samples:
-        class_counts[label_to_emotion[label]] += 1  # +1 để ánh xạ từ 0-6 sang 1-7
+        class_counts[label_to_emotion[label]] += 1  # Dùng nhãn trực tiếp từ 0-6
 
     # In phân bố lớp
     print(f"{dataset_name} class counts:", dict(class_counts))
@@ -132,7 +130,6 @@ def visualize_class_distribution(
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Saved class distribution plot to {save_path}")
     plt.close()
-
 
 # Trực quan hóa và lưu ảnh
 visualize_class_distribution(
@@ -184,8 +181,7 @@ test_loader = DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-
-# Xây dựng mô hình
+# Xây dựng mô hình EfficientNetB3
 class EfficientNetB3_Model(nn.Module):
     def __init__(self, num_classes):
         super(EfficientNetB3_Model, self).__init__()
@@ -195,7 +191,6 @@ class EfficientNetB3_Model(nn.Module):
 
     def forward(self, x):
         return self.backbone(x)
-
 
 model = EfficientNetB3_Model(num_classes=NUM_CLASSES)
 model = model.to(device)
@@ -208,7 +203,6 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=9, gamma=0.28)
 
-
 # Hàm tính metrics
 def compute_metrics(y_true, y_pred):
     acc = accuracy_score(y_true, y_pred)
@@ -216,7 +210,6 @@ def compute_metrics(y_true, y_pred):
     rec = recall_score(y_true, y_pred, average="macro", zero_division=0)
     f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
     return acc, f1, prec, rec
-
 
 # Tệp log
 metrics_log_file = "EfficientNetB3_RAFDB_metrics_log.csv"
@@ -311,9 +304,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
             all_labels_test.extend(labels.cpu().numpy())
 
     test_loss = running_loss_test / len(test_loader.dataset)
-    test_acc, test_f1, test_prec, test_rec = compute_metrics(
-        all_preds_test, all_labels_test
-    )
+    test_acc, test_f1, test_prec, test_rec = compute_metrics(all_preds_test, all_labels_test)
     conf_mat = confusion_matrix(all_labels_test, all_preds_test)
 
     # In kết quả
@@ -344,7 +335,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
     with open(confusion_matrix_log_file, "a") as f:
         f.write(f'{epoch},"{conf_mat.tolist()}"\n')
 
-    scheduler.step(val_loss)
+    scheduler.step()
 
     # Checkpointing và Early Stopping
     if val_f1 > best_f1:
