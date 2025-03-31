@@ -36,7 +36,10 @@ LEARNING_RATE = 1e-3
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (240, 240)  # EfficientNetB1 thường dùng input size 240x240
+TARGET_SIZE = (
+    240,
+    240,
+)  # EfficientNetB1 thường dùng input size 240x240 (thay đổi từ 260x260)
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -46,7 +49,7 @@ random.seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-# Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
+# Ánh xạ nhãn số sang chữ
 label_to_emotion = {
     0: "angry",
     1: "disgust",
@@ -65,7 +68,7 @@ train_transforms = transforms.Compose(
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(10),
         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-        transforms.Grayscale(num_output_channels=3),  # Chuyển tất cả thành ảnh xám
+        transforms.Grayscale(num_output_channels=3),
         transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -75,7 +78,7 @@ train_transforms = transforms.Compose(
 test_val_transforms = transforms.Compose(
     [
         transforms.Resize(TARGET_SIZE),
-        transforms.Grayscale(num_output_channels=3),  # Chuyển tất cả thành ảnh xám
+        transforms.Grayscale(num_output_channels=3),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
@@ -109,12 +112,10 @@ def visualize_class_distribution(
 ):
     class_counts = defaultdict(int)
     for _, label in dataset.samples:
-        class_counts[label_to_emotion[label]] += 1  # Dùng nhãn trực tiếp từ 0-6
+        class_counts[label_to_emotion[label]] += 1
 
-    # In phân bố lớp
     print(f"{dataset_name} class counts:", dict(class_counts))
 
-    # Trực quan hóa
     emotions = list(class_counts.keys())
     counts = list(class_counts.values())
 
@@ -126,7 +127,6 @@ def visualize_class_distribution(
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
 
-    # Lưu ảnh
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Saved class distribution plot to {save_path}")
@@ -261,8 +261,10 @@ def compute_metrics(y_true, y_pred):
 
 
 # Tệp log
-metrics_log_file = "EfficientNetB1_FER2013_vs1_metrics_log.csv"
-confusion_matrix_log_file = "EfficientNetB1_FER2013_vs1_confusion_matrix_log.csv"
+metrics_log_file = "EfficientNetB1_FER2013_vs1_metrics_log.csv"  # Thay đổi tên file
+confusion_matrix_log_file = (
+    "EfficientNetB1_FER2013_vs1_confusion_matrix_log.csv"  # Thay đổi tên file
+)
 
 if os.path.exists(metrics_log_file):
     os.remove(metrics_log_file)
@@ -394,7 +396,9 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_model_wts_f1 = copy.deepcopy(model.state_dict())
         epochs_no_improve = 0
         print("Model improved (F1). Saving best model weights.")
-        torch.save(model.state_dict(), "EfficientNetB1_FER2013_vs1_f1.pth")
+        torch.save(
+            model.state_dict(), "EfficientNetB1_FER2013_vs1_f1.pth"
+        )  # Thay đổi tên file
     else:
         epochs_no_improve += 1
         print(f"No improvement for {epochs_no_improve} epoch(s).")
@@ -406,11 +410,15 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_acc = val_acc
         best_model_wts_acc = copy.deepcopy(model.state_dict())
         print("Model improved (Accuracy). Saving best model weights.")
-        torch.save(model.state_dict(), "EfficientNetB1_FER2013_vs1_acc.pth")
+        torch.save(
+            model.state_dict(), "EfficientNetB1_FER2013_vs1_acc.pth"
+        )  # Thay đổi tên file
 
     if val_loss < best_loss:
         best_loss = val_loss
-        torch.save(model.state_dict(), "EfficientNetB1_FER2013_vs1_loss.pth")
+        torch.save(
+            model.state_dict(), "EfficientNetB1_FER2013_vs1_loss.pth"
+        )  # Thay đổi tên file
 
     torch.cuda.empty_cache()
 
