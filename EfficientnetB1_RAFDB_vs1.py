@@ -36,7 +36,7 @@ LEARNING_RATE = 1e-3
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (240, 240)  # EfficientNetB1 thường dùng input size 240x240
+TARGET_SIZE = (240, 240)
 
 SEED = 42
 torch.manual_seed(SEED)
@@ -49,12 +49,12 @@ print("Using device:", device)
 # Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
 label_to_emotion = {
     0: "surprise",  # Thư mục "1"
-    1: "fear",      # Thư mục "2"
-    2: "disgust",   # Thư mục "3"
-    3: "happy",     # Thư mục "4"
-    4: "sad",       # Thư mục "5"
-    5: "angry",     # Thư mục "6"
-    6: "neutral",   # Thư mục "7"
+    1: "fear",  # Thư mục "2"
+    2: "disgust",  # Thư mục "3"
+    3: "happy",  # Thư mục "4"
+    4: "sad",  # Thư mục "5"
+    5: "angry",  # Thư mục "6"
+    6: "neutral",  # Thư mục "7"
 }
 print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 
@@ -102,6 +102,7 @@ val_split_dataset.samples = [train_dataset.samples[i] for i in val_indices]
 val_split_dataset.transform = test_val_transforms
 val_split_dataset.targets = [train_dataset.targets[i] for i in val_indices]
 
+
 # Hàm trực quan hóa phân bố lớp
 def visualize_class_distribution(
     dataset, label_to_emotion, dataset_name="Dataset", save_path=None
@@ -130,6 +131,7 @@ def visualize_class_distribution(
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Saved class distribution plot to {save_path}")
     plt.close()
+
 
 # Trực quan hóa và lưu ảnh
 visualize_class_distribution(
@@ -181,7 +183,8 @@ test_loader = DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-# Định nghĩa lớp SEModule
+
+# Định nghĩa mô hình EfficientNetB4 với attention
 class SEModule(nn.Module):
     def __init__(self, channels, reduction=16):
         super(SEModule, self).__init__()
@@ -199,7 +202,7 @@ class SEModule(nn.Module):
         y = self.fc(y).view(b, c, 1, 1)
         return x * y.expand_as(x)
 
-# Định nghĩa mô hình EfficientNetB1 với attention
+# Định nghĩa mô hình EfficientNetB4_Attention với các lớp mới
 class EfficientNetB1_Attention(nn.Module):
     def __init__(self, num_classes):
         super(EfficientNetB1_Attention, self).__init__()
@@ -233,7 +236,8 @@ class EfficientNetB1_Attention(nn.Module):
         x = self.classifier(x)
         return x
 
-# Khởi tạo mô hình EfficientNetB1
+
+
 model = EfficientNetB1_Attention(num_classes=NUM_CLASSES)
 model = model.to(device)
 if torch.cuda.device_count() > 1:
@@ -245,6 +249,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=9, gamma=0.28)
 
+
 # Hàm tính metrics
 def compute_metrics(y_true, y_pred):
     acc = accuracy_score(y_true, y_pred)
@@ -252,6 +257,7 @@ def compute_metrics(y_true, y_pred):
     rec = recall_score(y_true, y_pred, average="macro", zero_division=0)
     f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
     return acc, f1, prec, rec
+
 
 # Tệp log
 metrics_log_file = "EfficientNetB1_RAFDB_vs1_metrics_log.csv"
