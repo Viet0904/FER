@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 from sklearn.model_selection import train_test_split
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import torchvision.models as models  # Import cần thiết cho EfficientNet
+import timm
 from torch.cuda.amp import GradScaler, autocast
 from sklearn.metrics import (
     accuracy_score,
@@ -26,20 +26,19 @@ from sklearn.metrics import (
 )
 
 # Cấu hình
-train_path = "/kaggle/input/raf-db-dataset/DATASET/train"
-test_path = "/kaggle/input/raf-db-dataset/DATASET/test"
+train_path = "/kaggle/input/fer2013/train"  # Đường dẫn tập train của FER-2013
+test_path = "/kaggle/input/fer2013/test"  # Đường dẫn tập test của FER-2013
 
-NUM_CLASSES = 7  # RAF-DB có 7 lớp cảm xúc
+NUM_CLASSES = 7
 BATCH_SIZE = 32
 NUM_EPOCHS = 100
 LEARNING_RATE = 1e-3
 PATIENCE = 20
 USE_WEIGHTED_SAMPLER = True
 VAL_SIZE = 0.2
-TARGET_SIZE = (380, 380)  # Kích thước đầu vào phù hợp với paper
-DROPOUT_RATE = 0.4  # Thêm dropout_rate làm hằng số
-
+TARGET_SIZE = (380, 380)
 SEED = 42
+DROPOUT_RATE = 0.4  # Thêm dropout_rate làm hằng số
 torch.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
@@ -47,15 +46,16 @@ random.seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-# Ánh xạ nhãn số sang chữ (theo nhãn ImageFolder cho RAF-DB: thư mục "1" đến "7")
+# Ánh xạ nhãn số sang chữ (theo thứ tự alphabet của thư mục trong FER-2013)
+# Thứ tự thư mục: angry -> disgust -> fear -> happy -> neutral -> sad -> surprise
 label_to_emotion = {
-    0: "surprise",  # Thư mục "1"
-    1: "fear",      # Thư mục "2"
-    2: "disgust",   # Thư mục "3"
-    3: "happy",     # Thư mục "4"
-    4: "sad",       # Thư mục "5"
-    5: "angry",     # Thư mục "6"
-    6: "neutral",   # Thư mục "7"
+    0: "angry",
+    1: "disgust",
+    2: "fear",
+    3: "happy",
+    4: "neutral",
+    5: "sad",
+    6: "surprise",
 }
 print("Mapping (ImageFolder label -> emotion):", label_to_emotion)
 
@@ -82,11 +82,22 @@ test_val_transforms = transforms.Compose(
     ]
 )
 
-# Load dataset
+# Load dataset và in thông tin
 train_dataset = datasets.ImageFolder(root=train_path, transform=train_transforms)
 test_dataset = datasets.ImageFolder(root=test_path, transform=test_val_transforms)
 
-# Chia tập valid
+# In thông tin khi load folder
+print("\nTrain dataset info:")
+print("Classes:", train_dataset.classes)  # Danh sách tên thư mục (classes)
+print("Class to idx:", train_dataset.class_to_idx)  # Ánh xạ từ tên thư mục sang số
+print("Number of samples:", len(train_dataset))
+
+print("\nTest dataset info:")
+print("Classes:", test_dataset.classes)
+print("Class to idx:", test_dataset.class_to_idx)
+print("Number of samples:", len(test_dataset))
+
+# Chia tập valid (20% từ train)
 train_indices, val_indices = train_test_split(
     list(range(len(train_dataset))),
     test_size=VAL_SIZE,
@@ -103,6 +114,7 @@ val_split_dataset.samples = [train_dataset.samples[i] for i in val_indices]
 val_split_dataset.transform = test_val_transforms
 val_split_dataset.targets = [train_dataset.targets[i] for i in val_indices]
 
+
 # Hàm trực quan hóa phân bố lớp
 def visualize_class_distribution(
     dataset, label_to_emotion, dataset_name="Dataset", save_path=None
@@ -111,8 +123,10 @@ def visualize_class_distribution(
     for _, label in dataset.samples:
         class_counts[label_to_emotion[label]] += 1
 
+    # In phân bố lớp
     print(f"{dataset_name} class counts:", dict(class_counts))
 
+    # Trực quan hóa
     emotions = list(class_counts.keys())
     counts = list(class_counts.values())
 
@@ -124,20 +138,28 @@ def visualize_class_distribution(
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
 
+    # Lưu ảnh
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Saved class distribution plot to {save_path}")
     plt.close()
 
+
 # Trực quan hóa và lưu ảnh
 visualize_class_distribution(
-    train_split_dataset, label_to_emotion, "Train", "train_class_distribution.png"
+    train_split_dataset,
+    label_to_emotion,
+    "Train",
+    "train_class_distribution_FER2013.png",
 )
 visualize_class_distribution(
-    val_split_dataset, label_to_emotion, "Validation", "val_class_distribution.png"
+    val_split_dataset,
+    label_to_emotion,
+    "Validation",
+    "val_class_distribution_FER2013.png",
 )
 visualize_class_distribution(
-    test_dataset, label_to_emotion, "Test", "test_class_distribution.png"
+    test_dataset, label_to_emotion, "Test", "test_class_distribution_FER2013.png"
 )
 
 # Data loaders
@@ -179,9 +201,11 @@ test_loader = DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
 )
 
-# Định nghĩa mô hình EfficientNetB4 với classifier mới
+
 class FineTunedEfficientNetB4(nn.Module):
-    def __init__(self, num_classes=7, dropout_rate=0.4):  # Thêm dropout_rate làm tham số
+    def __init__(
+        self, num_classes=7, dropout_rate=0.4
+    ):  # Thêm dropout_rate làm tham số
         super(FineTunedEfficientNetB4, self).__init__()
 
         # Tải mô hình EfficientNetB4 pre-trained làm backbone
@@ -218,8 +242,11 @@ class FineTunedEfficientNetB4(nn.Module):
         x = self.classifier(x)  # Qua các lớp fully connected
         return x
 
+
 # Khởi tạo mô hình
-model = FineTunedEfficientNetB4(num_classes=NUM_CLASSES, dropout_rate=DROPOUT_RATE).to(device)
+model = FineTunedEfficientNetB4(num_classes=NUM_CLASSES, dropout_rate=DROPOUT_RATE).to(
+    device
+)
 if torch.cuda.device_count() > 1:
     print("Using", torch.cuda.device_count(), "GPUs!")
     model = nn.DataParallel(model)
@@ -229,6 +256,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=9, gamma=0.28)
 
+
 # Hàm tính metrics
 def compute_metrics(y_true, y_pred):
     acc = accuracy_score(y_true, y_pred)
@@ -237,9 +265,10 @@ def compute_metrics(y_true, y_pred):
     f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
     return acc, f1, prec, rec
 
+
 # Tệp log
-metrics_log_file = "EfficientNetB4_RAFDB_vs2_metrics_log.csv"
-confusion_matrix_log_file = "EfficientNetB4_RAFDB_vs2_confusion_matrix_log.csv"
+metrics_log_file = "EfficientNetB4_FER2013_vs2_metrics_log.csv"
+confusion_matrix_log_file = "EfficientNetB4_FER2013_vs2_confusion_matrix_log.csv"
 
 if os.path.exists(metrics_log_file):
     os.remove(metrics_log_file)
@@ -330,7 +359,9 @@ for epoch in range(1, NUM_EPOCHS + 1):
             all_labels_test.extend(labels.cpu().numpy())
 
     test_loss = running_loss_test / len(test_loader.dataset)
-    test_acc, test_f1, test_prec, test_rec = compute_metrics(all_preds_test, all_labels_test)
+    test_acc, test_f1, test_prec, test_rec = compute_metrics(
+        all_preds_test, all_labels_test
+    )
     conf_mat = confusion_matrix(all_labels_test, all_preds_test)
 
     # In kết quả
@@ -369,7 +400,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_model_wts_f1 = copy.deepcopy(model.state_dict())
         epochs_no_improve = 0
         print("Model improved (F1). Saving best model weights.")
-        torch.save(model.state_dict(), "EfficientNetB4_RAFDB_vs2_f1.pth")
+        torch.save(model.state_dict(), "EfficientNetB4_FER2013_vs2_f1.pth")
     else:
         epochs_no_improve += 1
         print(f"No improvement for {epochs_no_improve} epoch(s).")
@@ -381,11 +412,11 @@ for epoch in range(1, NUM_EPOCHS + 1):
         best_acc = val_acc
         best_model_wts_acc = copy.deepcopy(model.state_dict())
         print("Model improved (Accuracy). Saving best model weights.")
-        torch.save(model.state_dict(), "EfficientNetB4_RAFDB_vs2_acc.pth")
+        torch.save(model.state_dict(), "EfficientNetB4_FER2013_vs2_acc.pth")
 
     if val_loss < best_loss:
         best_loss = val_loss
-        torch.save(model.state_dict(), "EfficientNetB4_RAFDB_vs2_loss.pth")
+        torch.save(model.state_dict(), "EfficientNetB4_FER2013_vs2_loss.pth")
 
     torch.cuda.empty_cache()
 

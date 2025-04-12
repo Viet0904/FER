@@ -58,27 +58,41 @@ class CKPlusDataset(Dataset):
 
 # Định nghĩa mô hình mới
 class FineTunedEfficientNetB4(nn.Module):
-    def __init__(self, num_classes=7, dropout_rate=0.5):
+    def __init__(self, num_classes=7, dropout_rate=0.4):  # Thêm dropout_rate làm tham số
         super(FineTunedEfficientNetB4, self).__init__()
+
+        # Tải mô hình EfficientNetB4 pre-trained làm backbone
         self.backbone = models.efficientnet_b4(pretrained=True)
-        self.backbone.classifier = nn.Identity()
+
+        # Xóa lớp classifier mặc định của EfficientNetB4
+        self.backbone.classifier = nn.Identity()  # Chỉ giữ lại backbone
+
+        # Số đặc trưng đầu ra từ backbone (1792 cho EfficientNetB4)
         num_ftrs = 1792
-        self.pool = nn.AdaptiveAvgPool2d(1)
-        self.flatten = nn.Flatten()
+
+        # Các lớp bổ sung
+        self.pool = nn.AdaptiveAvgPool2d(1)  # GlobalAveragePooling2D
+        self.flatten = nn.Flatten()  # Chuyển từ tensor 4D sang 2D
+
+        # Classifier mới theo yêu cầu
         self.classifier = nn.Sequential(
             nn.Dropout(dropout_rate),
-            nn.Linear(num_ftrs, 512),
+            nn.Linear(1792, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(1024, 512),
             nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(512, num_classes)
+            nn.Linear(512, num_classes),
         )
 
     def forward(self, x):
-        x = self.backbone.features(x)
-        x = self.pool(x)
-        x = self.flatten(x)
-        x = self.classifier(x)
+        x = self.backbone.features(x)  # Trích xuất đặc trưng từ backbone
+        x = self.pool(x)  # GlobalAveragePooling2D
+        x = self.flatten(x)  # Chuyển thành (batch_size, num_ftrs)
+        x = self.classifier(x)  # Qua các lớp fully connected
         return x
 
 # Load the dataset
